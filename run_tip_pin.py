@@ -22,7 +22,16 @@ def parse_args():
     parser.add_argument(
         "--vertical",
         choices=["3d", "honda"],
-        help="Limit tip categories to one vertical.",
+        help="Limit non-affiliate categories to one vertical.",
+    )
+    parser.add_argument(
+        "--content-type",
+        choices=["tip", "quote", "all"],
+        default="all",
+        help=(
+            "Choose which non-affiliate content to run: "
+            "'tip', 'quote', or 'all'."
+        ),
     )
     parser.add_argument(
         "--list-categories",
@@ -32,8 +41,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def _matches(category, filters, vertical):
+def _matches(category, filters, vertical, content_type):
     if vertical and category.get("vertical") != vertical:
+        return False
+
+    category_type = category.get("content_type", "tip")
+    if content_type != "all" and category_type != content_type:
         return False
 
     if not filters:
@@ -58,13 +71,22 @@ def main():
     categories = [
         category
         for category in tip_cfg.get("tip_categories", [])
-        if _matches(category, args.categories, args.vertical)
+        if _matches(
+            category,
+            args.categories,
+            args.vertical,
+            args.content_type,
+        )
     ]
 
     if args.list_categories:
-        print("\nAvailable non-affiliate tip categories:\n")
+        print("\nAvailable non-affiliate categories:\n")
         for category in tip_cfg.get("tip_categories", []):
-            print(f"- {category['name']} [{category.get('vertical', '')}]")
+            content_type = category.get("content_type", "tip")
+            print(
+                f"- {category['name']} "
+                f"[{category.get('vertical', '')} | {content_type}]"
+            )
         return
 
     if not categories:
@@ -78,7 +100,8 @@ def main():
     excluded_ids = history.recent_tip_ids(cooldown_days)
     output_dir = settings.get("output_dir", "output/tip_images")
 
-    print("\n=== Pinterest Non-Affiliate Tip Automation ===")
+    print("\n=== Pinterest Non-Affiliate Content Automation ===")
+    print(f"Content type: {args.content_type}")
     if args.categories:
         print("Tip categories: " + ", ".join(args.categories))
     if args.vertical:
@@ -112,7 +135,11 @@ def main():
         )
         print(f"Tip ID: {tip['id']}")
         print(f"Title: {tip['title']}")
-        print(f"Headline: {tip['headline']}")
+        content_type = category.get("content_type", "tip")
+        if content_type == "quote":
+            print(f"Quote: {tip['quote']}")
+        else:
+            print(f"Headline: {tip['headline']}")
 
         draft = build_tip_draft(
             tip,

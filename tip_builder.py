@@ -149,12 +149,83 @@ def render_tip_image(tip, category_name, output_dir):
     return str(output_path.resolve())
 
 
-def build_tip_draft(tip, category, output_dir):
-    image_path = render_tip_image(
-        tip,
-        category_name=category["name"],
-        output_dir=output_dir,
+def render_quote_image(tip, category_name, output_dir):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    image = Image.new("RGB", (WIDTH, HEIGHT), "white")
+    draw = ImageDraw.Draw(image)
+
+    category_font = _font(32, bold=True)
+    quote_font = _font(64, bold=True)
+    footer_font = _font(28, bold=True)
+
+    margin = 105
+    max_width = WIDTH - (margin * 2)
+
+    draw.rounded_rectangle(
+        (55, 55, WIDTH - 55, HEIGHT - 55),
+        radius=34,
+        outline="black",
+        width=4,
     )
+
+    y = 120
+    draw.text(
+        (margin, y),
+        category_name.upper(),
+        font=category_font,
+        fill="black",
+    )
+
+    y += 170
+    draw.text((margin, y), '"', font=_font(110, bold=True), fill="black")
+    y += 110
+
+    y = _draw_wrapped(
+        draw,
+        tip["quote"],
+        quote_font,
+        margin,
+        y,
+        max_width,
+        line_gap=24,
+    )
+
+    y += 50
+    draw.text((margin, y), '"', font=_font(110, bold=True), fill="black")
+
+    footer = "RELATABLE? SAVE THIS ONE."
+    footer_box = draw.textbbox((0, 0), footer, font=footer_font)
+    footer_width = footer_box[2] - footer_box[0]
+    draw.text(
+        ((WIDTH - footer_width) / 2, HEIGHT - 150),
+        footer,
+        font=footer_font,
+        fill="black",
+    )
+
+    filename = f"{tip['id']}_pinterest.jpg"
+    output_path = output_dir / filename
+    image.save(output_path, format="JPEG", quality=95, optimize=True)
+    return str(output_path.resolve())
+
+
+def build_tip_draft(tip, category, output_dir):
+    content_type = category.get("content_type", "tip")
+
+    if content_type == "quote":
+        image_path = render_quote_image(
+            tip,
+            category_name=category["name"],
+            output_dir=output_dir,
+        )
+    else:
+        image_path = render_tip_image(
+            tip,
+            category_name=category["name"],
+            output_dir=output_dir,
+        )
 
     return PinDraft(
         title=tip["title"][:100],
