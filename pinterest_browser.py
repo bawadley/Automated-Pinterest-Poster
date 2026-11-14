@@ -171,10 +171,12 @@ class PinterestBrowserPublisher:
             description_field.click()
             description_field.fill(draft.description)
 
-            # Known-good destination-link selector
-            link_field = page.get_by_placeholder("Add a link")
-            link_field.wait_for(state="visible", timeout=10000)
-            link_field.fill(draft.affiliate_url)
+            # Destination links are optional. Non-affiliate tip Pins leave
+            # this field untouched so they publish as native Pinterest content.
+            if draft.affiliate_url:
+                link_field = page.get_by_placeholder("Add a link")
+                link_field.wait_for(state="visible", timeout=10000)
+                link_field.fill(draft.affiliate_url)
 
             board_name = draft.board_name.strip()
             if board_name:
