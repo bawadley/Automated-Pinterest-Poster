@@ -1,3 +1,5 @@
+import argparse
+
 from config import load_config
 from find_best_products import collect_products
 from selector import select_top_products
@@ -5,10 +7,58 @@ from pin_builder import build_pin_draft
 from pinterest_browser import PinterestBrowserPublisher
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Find and prepare the best eBay product for Pinterest."
+    )
+    parser.add_argument(
+        "--category",
+        help=(
+            "Search only categories whose name/query contains this text. "
+            "Example: --category \"PLA Filament\""
+        ),
+    )
+    parser.add_argument(
+        "--vertical",
+        choices=["honda", "3d"],
+        help=(
+            "Search only one vertical. Use 'honda' for CB750/Honda parts "
+            "or '3d' for 3D-printing products."
+        ),
+    )
+    parser.add_argument(
+        "--list-categories",
+        action="store_true",
+        help="List enabled search categories and exit without calling eBay.",
+    )
+    return parser.parse_args()
+
+
+def print_categories(cfg):
+    print("\nEnabled search categories:\n")
+    for category in cfg.get("categories", []):
+        if category.get("enabled", True):
+            print(f"- {category['name']}")
+
+
 def main():
+    args = parse_args()
     cfg = load_config()
 
-    products = collect_products(cfg)
+    if args.list_categories:
+        print_categories(cfg)
+        return
+
+    if args.vertical:
+        print(f"Test filter: vertical = {args.vertical}")
+    if args.category:
+        print(f"Test filter: category contains = {args.category}")
+
+    products = collect_products(
+        cfg,
+        category_filter=args.category,
+        vertical=args.vertical,
+    )
 
     selection_cfg = cfg.get("selection", {})
     top_count = int(selection_cfg.get("top_count", 5))
