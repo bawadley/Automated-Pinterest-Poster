@@ -1,5 +1,4 @@
 from pathlib import Path
-import time
 from playwright.sync_api import sync_playwright
 from models import PinDraft
 
@@ -206,13 +205,67 @@ class PinterestBrowserPublisher:
                 context.close()
                 return False
 
+            before_publish_url = page.url
+
             self._click_first(page, [
                 'button:has-text("Publish")',
-                'button:has-text("Save")',
                 '[data-test-id*="publish"]',
             ], "Publish button")
 
-            time.sleep(5)
-            print("Publish click sent. Verify the Pin on Pinterest.")
+            print("Publish click sent. Waiting for Pinterest to finish publishing...")
+
+            publish_confirmed = False
+
+            # Pinterest can auto-save the editor as a draft while the Pin is
+            # being created. Do not close Chrome immediately after clicking
+            # Publish; wait for Pinterest to acknowledge completion so its
+            # draft state has time to clear.
+            success_texts = [
+                "Your Pin was published",
+                "Pin published",
+                "Published",
+                "Saved to",
+            ]
+
+            for _ in range(30):
+                page.wait_for_timeout(500)
+
+                if page.url != before_publish_url:
+                    publish_confirmed = True
+                    break
+
+                for success_text in success_texts:
+                    try:
+                        notice = page.get_by_text(success_text, exact=False).first
+                        if notice.count() > 0 and notice.is_visible():
+                            publish_confirmed = True
+                            break
+                    except Exception:
+                        pass
+
+                if publish_confirmed:
+                    break
+
+            if publish_confirmed:
+                print("Pinterest confirmed the publish.")
+            else:
+                print(
+                    "WARNING: Pinterest did not show a publish confirmation "
+                    "before the timeout. The Pin may still have published."
+                )
+
+            # Give Pinterest a final moment to finish server-side draft cleanup,
+            # then leave the editor normally before closing the browser context.
+            page.wait_for_timeout(2000)
+            try:
+                page.goto(
+                    "https://www.pinterest.com/",
+                    wait_until="domcontentloaded",
+                    timeout=10000,
+                )
+                page.wait_for_timeout(1000)
+            except Exception:
+                pass
+
             context.close()
-            return True
+            return publish_confirmed
