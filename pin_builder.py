@@ -3,6 +3,7 @@ from pathlib import Path
 import requests
 
 from models import PinDraft
+from image_utils import prepare_pinterest_image
 
 
 AFFILIATE_DISCLOSURE = (
@@ -56,13 +57,20 @@ def download_product_image(product, output_dir="output/pin_images"):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     safe_id = product.legacy_item_id or "product"
-    path = out_dir / f"{safe_id}.jpg"
+    raw_path = out_dir / f"{safe_id}_raw.jpg"
 
     response = requests.get(product.image_url, timeout=30)
     response.raise_for_status()
-    path.write_bytes(response.content)
+    raw_path.write_bytes(response.content)
 
-    return str(path.resolve())
+    final_path = out_dir / f"{safe_id}_pinterest.jpg"
+
+    return prepare_pinterest_image(
+        raw_path,
+        output_path=final_path,
+        target_width=1000,
+        target_height=1500,
+    )
 
 
 def build_pin_draft(product, board_name, score_info=None):
