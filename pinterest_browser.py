@@ -562,15 +562,17 @@ class PinterestBrowserPublisher:
             if publish_confirmed:
                 self._cleanup_matching_draft(page, draft.title)
 
+            # Publishing is complete. Close every page in the persistent
+            # Pinterest context, then close the context itself so the Chrome
+            # window exits instead of lingering after the run.
             try:
-                page.goto(
-                    "https://www.pinterest.com/",
-                    wait_until="domcontentloaded",
-                    timeout=10000,
-                )
-                page.wait_for_timeout(1000)
-            except Exception:
-                pass
+                for open_page in list(context.pages):
+                    try:
+                        open_page.close()
+                    except Exception:
+                        pass
+            finally:
+                context.close()
 
-            context.close()
+            print("Pinterest browser closed.")
             return publish_confirmed
