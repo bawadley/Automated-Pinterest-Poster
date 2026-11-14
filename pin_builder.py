@@ -340,35 +340,20 @@ def build_topic_tags(product) -> list[str]:
 
 
 def resolve_board_name(product, default_board="", board_map=None) -> str:
-    text = _combined_text(product)
     board_map = board_map or {}
 
     honda_board = board_map.get("honda", HONDA_BOARD_NAME)
-    filament_board = board_map.get("filament", FILAMENT_BOARD_NAME)
-    bambu_board = board_map.get("bambu", BAMBU_BOARD_NAME)
-    creality_board = board_map.get("creality", CREALITY_BOARD_NAME)
-    printer_parts_board = board_map.get("printer_parts", PRINTER_PARTS_BOARD_NAME)
-    printer_accessories_board = board_map.get(
-        "printer_accessories",
-        PRINTER_ACCESSORIES_BOARD_NAME,
+    three_d_board = board_map.get(
+        "three_d_printing",
+        "3D Printer Parts, Filament & Supplies",
     )
     fallback_board = board_map.get(
         "default",
-        default_board or PRINTER_PARTS_BOARD_NAME,
+        default_board or three_d_board,
     )
 
     if _is_3d_printing(product):
-        part = _detect_label(product, PRINTER_PART_LABELS, "3D Printer Part")
-
-        if part == "Filament":
-            return filament_board
-        if "bambu" in text:
-            return bambu_board
-        if any(token in text for token in ("creality", "ender", "cr-10")):
-            return creality_board
-        if part in ("Filament Dryer", "Enclosure"):
-            return printer_accessories_board
-        return printer_parts_board
+        return three_d_board
 
     if _is_honda(product):
         return honda_board

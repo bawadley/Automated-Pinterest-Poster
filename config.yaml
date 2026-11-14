@@ -7,13 +7,9 @@ search:
   require_image: true
 
 pinterest_boards:
-  default: "3D Printer Parts & Upgrades"
+  default: "3D Printer Parts, Filament & Supplies"
   honda: "Vintage Honda Motorcycle Parts"
-  filament: "3D Printer Filament & Materials"
-  bambu: "Bambu Lab Parts & Accessories"
-  creality: "Creality 3D Printer Parts"
-  printer_parts: "3D Printer Parts & Upgrades"
-  printer_accessories: "3D Printer Accessories"
+  three_d_printing: "3D Printer Parts, Filament & Supplies"
 
 categories:
   - name: "Honda CB750 Exhaust"
