@@ -58,6 +58,26 @@ class EbayAPI:
             return match.group(1)
         return rest_item_id if (rest_item_id or "").isdigit() else ""
 
+    @staticmethod
+    def _prefer_large_ebay_image(url: str) -> str:
+        """
+        eBay Picture Services URLs often encode the served size in the final
+        path component (for example s-l225, s-l500, s-l1600). Request the
+        large variant when the image is hosted by eBay.
+        """
+        if not url:
+            return ""
+
+        if "ebayimg.com" not in url.lower():
+            return url
+
+        return re.sub(
+            r"s-l\d+(?=\.(?:jpg|jpeg|png|webp)(?:\?|$))",
+            "s-l1600",
+            url,
+            flags=re.IGNORECASE,
+        )
+
     def _trading_get_item(self, legacy_item_id: str, token: str):
         body = f"""<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -79,9 +99,9 @@ class EbayAPI:
             timeout=30,
         )
 
-    def get_quantity_sold(self, legacy_item_id: str) -> int:
+    def get_listing_details(self, legacy_item_id: str) -> dict:
         if not legacy_item_id:
-            return 0
+            return {"quantity_sold": 0, "image_url": ""}
 
         token = self.token_manager.get_user_access_token()
         response = self._trading_get_item(legacy_item_id, token)
@@ -118,15 +138,36 @@ class EbayAPI:
             else:
                 raise RuntimeError(message)
 
-        sold = root.findtext(
+        sold_text = root.findtext(
             ".//e:Item/e:SellingStatus/e:QuantitySold",
             default="0",
             namespaces=ns,
         )
         try:
-            return int(sold)
+            sold = int(sold_text)
         except Exception:
-            return 0
+            sold = 0
+
+        picture_urls = root.findall(
+            ".//e:Item/e:PictureDetails/e:PictureURL",
+            namespaces=ns,
+        )
+        listing_image = ""
+        for picture in picture_urls:
+            if picture.text and picture.text.strip():
+                listing_image = self._prefer_large_ebay_image(
+                    picture.text.strip()
+                )
+                break
+
+        return {
+            "quantity_sold": sold,
+            "image_url": listing_image,
+        }
+
+    def get_quantity_sold(self, legacy_item_id: str) -> int:
+        """Backward-compatible wrapper used by any older callers."""
+        return self.get_listing_details(legacy_item_id)["quantity_sold"]
 
     def search(
         self,
@@ -165,7 +206,7 @@ class EbayAPI:
         total_items = len(items)
 
         if progress_callback:
-            progress_callback(0, total_items, "Checking listing sales history")
+            progress_callback(0, total_items, "Checking listing details")
 
         products = []
         for index, item in enumerate(items, start=1):
@@ -173,15 +214,25 @@ class EbayAPI:
             legacy_id = self._legacy_id(rest_id)
 
             try:
-                sold = self.get_quantity_sold(legacy_id)
+                details = self.get_listing_details(legacy_id)
+                sold = details["quantity_sold"]
+                listing_image_url = details["image_url"]
             except Exception as exc:
-                print(f"\n  WARNING: sold count unavailable for {legacy_id}: {exc}")
+                print(f"\n  WARNING: listing details unavailable for {legacy_id}: {exc}")
                 sold = 0
+                listing_image_url = ""
 
             price = item.get("price", {}) or {}
             seller = item.get("seller", {}) or {}
-            image = item.get("image", {}) or {}
+            search_image = item.get("image", {}) or {}
             cats = item.get("categories", []) or []
+
+            # Prefer the actual listing/gallery image returned by GetItem.
+            # Fall back to the Browse search thumbnail only when necessary.
+            image_url = (
+                listing_image_url
+                or self._prefer_large_ebay_image(search_image.get("imageUrl", ""))
+            )
 
             products.append(EbayProduct(
                 search_category=category_name,
@@ -195,7 +246,7 @@ class EbayAPI:
                 seller_feedback_percent=float(
                     seller.get("feedbackPercentage", 0) or 0
                 ),
-                image_url=image.get("imageUrl", ""),
+                image_url=image_url,
                 item_url=item.get("itemWebUrl", ""),
                 affiliate_url=(
                     item.get("itemAffiliateWebUrl", "")
