@@ -1,5 +1,6 @@
 import argparse
 
+from ai_content_generator import AIContentGenerator
 from config import load_config
 from pinterest_browser import PinterestBrowserPublisher
 from tip_builder import build_tip_draft, load_tip_config
@@ -31,6 +32,14 @@ def parse_args():
         help=(
             "Choose which non-affiliate content to run: "
             "'tip', 'quote', 'question', 'quiz', or 'all'."
+        ),
+    )
+    parser.add_argument(
+        "--static",
+        action="store_true",
+        help=(
+            "Use the prewritten tip_config.yaml content instead of AI "
+            "generation for this run."
         ),
     )
     parser.add_argument(
@@ -111,6 +120,22 @@ def main():
         f"{len(excluded_ids)} excluded for {cooldown_days} days"
     )
 
+    ai_generator = AIContentGenerator(app_cfg.get("ai", {}))
+    ai_enabled = ai_generator.available and not args.static
+
+    if args.static:
+        print("Content source: static tip_config.yaml (--static)")
+    elif ai_enabled:
+        print(
+            f"Content source: AI generation "
+            f"({app_cfg['ai'].get('model', 'gpt-6-luna')})"
+        )
+    else:
+        print(
+            "Content source: static fallback "
+            "(OPENAI_API_KEY is not configured)"
+        )
+
     # Explicit multiple-category filters intentionally produce one fresh Pin
     # per matched category, mirroring the affiliate multi-category test mode.
     if args.categories:
@@ -122,10 +147,38 @@ def main():
     processed = 0
 
     for index, category in enumerate(categories_to_post, start=1):
-        tip = _pick_fresh_tip(category, excluded_ids)
+        tip = None
+        generated_by_ai = False
+
+        if ai_enabled:
+            previous_items = history.posted_items(limit=100)
+            try:
+                print(
+                    f"\nGenerating fresh AI "
+                    f"{category.get('content_type', 'tip')}..."
+                )
+                tip = ai_generator.generate(
+                    category,
+                    previous_items=previous_items,
+                )
+                generated_by_ai = True
+                print("AI content generated and passed duplicate checks.")
+            except Exception as exc:
+                print(
+                    f"WARNING: AI generation failed: {exc}"
+                )
+                print(
+                    "Falling back to the prewritten content library "
+                    "for this Pin."
+                )
+
+        if tip is None:
+            tip = _pick_fresh_tip(category, excluded_ids)
+
         if not tip:
             print(
-                f"\nNo unused tips remain in category: {category['name']}"
+                f"\nNo unused static content remains in category: "
+                f"{category['name']}"
             )
             continue
 
@@ -162,7 +215,10 @@ def main():
         if published:
             history.mark_posted(tip, category["name"])
             excluded_ids.add(tip["id"])
-            print(f"Saved tip {tip['id']} to tip history.")
+            source = "AI-generated" if generated_by_ai else "static"
+            print(
+                f"Saved {source} content {tip['id']} to tip history."
+            )
         else:
             print("Dry run / no confirmed publish: tip was NOT added to history.")
 

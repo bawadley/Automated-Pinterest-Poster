@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import json
 import sqlite3
 
 
@@ -27,6 +28,18 @@ class TipHistory:
                 """
             )
 
+            columns = {
+                row[1]
+                for row in conn.execute(
+                    "PRAGMA table_info(posted_tips)"
+                ).fetchall()
+            }
+
+            if "content_json" not in columns:
+                conn.execute(
+                    "ALTER TABLE posted_tips ADD COLUMN content_json TEXT"
+                )
+
     def recent_tip_ids(self, cooldown_days: int) -> set[str]:
         cutoff = datetime.now(timezone.utc) - timedelta(
             days=max(int(cooldown_days), 0)
@@ -42,9 +55,46 @@ class TipHistory:
             ).fetchall()
         return {row[0] for row in rows if row and row[0]}
 
+    def posted_items(self, limit: int = 100) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT tip_id, category, title, content_json, last_posted
+                FROM posted_tips
+                ORDER BY last_posted DESC
+                LIMIT ?
+                """,
+                (max(int(limit), 1),),
+            ).fetchall()
+
+        items = []
+        for tip_id, category, title, content_json, last_posted in rows:
+            content = None
+            if content_json:
+                try:
+                    content = json.loads(content_json)
+                except Exception:
+                    content = None
+
+            items.append(
+                {
+                    "tip_id": tip_id,
+                    "category": category,
+                    "title": title,
+                    "content": content,
+                    "last_posted": last_posted,
+                }
+            )
+        return items
+
     def mark_posted(self, tip: dict, category_name: str):
         now = datetime.now(timezone.utc).isoformat()
         tip_id = tip["id"]
+        content_json = json.dumps(
+            tip,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
 
         with self._connect() as conn:
             existing = conn.execute(
@@ -58,6 +108,7 @@ class TipHistory:
                     UPDATE posted_tips
                     SET category = ?,
                         title = ?,
+                        content_json = ?,
                         last_posted = ?,
                         times_posted = ?
                     WHERE tip_id = ?
@@ -65,6 +116,7 @@ class TipHistory:
                     (
                         category_name,
                         tip["title"],
+                        content_json,
                         now,
                         int(existing[1] or 0) + 1,
                         tip_id,
@@ -74,11 +126,24 @@ class TipHistory:
                 conn.execute(
                     """
                     INSERT INTO posted_tips (
-                        tip_id, category, title, first_posted, last_posted, times_posted
+                        tip_id,
+                        category,
+                        title,
+                        content_json,
+                        first_posted,
+                        last_posted,
+                        times_posted
                     )
-                    VALUES (?, ?, ?, ?, ?, 1)
+                    VALUES (?, ?, ?, ?, ?, ?, 1)
                     """,
-                    (tip_id, category_name, tip["title"], now, now),
+                    (
+                        tip_id,
+                        category_name,
+                        tip["title"],
+                        content_json,
+                        now,
+                        now,
+                    ),
                 )
 
     def posted_count(self) -> int:

@@ -29,6 +29,15 @@ def load_config():
         "output_dir": os.getenv("OUTPUT_DIR", "output"),
     }
 
+    cfg["ai"] = {
+        "api_key": os.getenv("OPENAI_API_KEY", ""),
+        "model": os.getenv("OPENAI_CONTENT_MODEL", "gpt-6-luna"),
+        "base_url": os.getenv(
+            "OPENAI_BASE_URL",
+            "https://api.openai.com/v1",
+        ).rstrip("/"),
+    }
+
     cfg["pinterest"] = {
         "board_name": os.getenv(
             "PINTEREST_BOARD_NAME",
