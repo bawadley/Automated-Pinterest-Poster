@@ -7,6 +7,9 @@ search:
   require_image: true
 
 categories:
+  # -------------------------
+  # Vintage Honda motorcycle parts
+  # -------------------------
   - name: "Honda CB750 Exhaust"
     enabled: true
     query: "Honda CB750 exhaust"
@@ -36,6 +39,58 @@ categories:
     enabled: true
     query: "Honda CB750 OEM parts"
     category_id: ""
+
+  # -------------------------
+  # 3D printing
+  # Smaller per-category result counts keep daily API usage reasonable.
+  # -------------------------
+  - name: "3D Printing PLA Filament"
+    enabled: true
+    query: "PLA filament 1.75mm 3D printer"
+    category_id: ""
+    results_per_category: 12
+
+  - name: "3D Printing PETG Filament"
+    enabled: true
+    query: "PETG filament 1.75mm 3D printer"
+    category_id: ""
+    results_per_category: 12
+
+  - name: "3D Printing Bambu Lab Parts"
+    enabled: true
+    query: "Bambu Lab parts accessories"
+    category_id: ""
+    results_per_category: 12
+
+  - name: "3D Printing Creality Parts"
+    enabled: true
+    query: "Creality Ender CR-10 3D printer parts"
+    category_id: ""
+    results_per_category: 12
+
+  - name: "3D Printing Hotends Extruders"
+    enabled: true
+    query: "3D printer hotend extruder"
+    category_id: ""
+    results_per_category: 12
+
+  - name: "3D Printing Nozzles Build Plates"
+    enabled: true
+    query: "3D printer nozzle build plate"
+    category_id: ""
+    results_per_category: 12
+
+  - name: "3D Printing Electronics"
+    enabled: true
+    query: "3D printer motherboard screen controller"
+    category_id: ""
+    results_per_category: 12
+
+  - name: "3D Printing Accessories"
+    enabled: true
+    query: "3D printer filament dryer enclosure accessories"
+    category_id: ""
+    results_per_category: 12
 
 selection:
   top_count: 5

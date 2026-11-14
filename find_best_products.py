@@ -18,7 +18,8 @@ def passes_filters(product, cfg):
     if bool(cfg.get("require_image", True)) and not product.image_url:
         return False
 
-    # Intentionally allow zero-sold listings.
+    # Intentionally allow zero-sold listings. High-value one-off parts can
+    # still be good affiliate opportunities.
     return True
 
 
@@ -35,11 +36,18 @@ def collect_products(cfg):
         if not category.get("enabled", True):
             continue
 
+        category_limit = int(
+            category.get(
+                "results_per_category",
+                search_cfg.get("results_per_category", 20),
+            )
+        )
+
         results = api.search(
             category_name=category["name"],
             query=category.get("query", ""),
             category_id=str(category.get("category_id", "") or ""),
-            limit=int(search_cfg.get("results_per_category", 20)),
+            limit=category_limit,
         )
 
         products.extend(
