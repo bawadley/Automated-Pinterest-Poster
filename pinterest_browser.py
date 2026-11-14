@@ -48,18 +48,77 @@ class PinterestBrowserPublisher:
                 last_error = exc
         raise RuntimeError(f"Could not find Pinterest {label}. Last error: {last_error}")
 
-    def _open_board_picker(self, page):
+    def _open_board_picker(self, page, desired_board):
         """
-        Open Pinterest's board dropdown and verify that the board picker is
-        actually open before attempting to search for a board.
+        Open Pinterest's board dropdown by clicking the currently displayed
+        board name. Pinterest's create-Pin UI often exposes the selected board
+        text more reliably than generic board selectors.
         """
         picker_search = page.locator(
             '#pickerSearchField, input[placeholder="Search through your boards"]'
         ).first
 
-        # Pinterest has used several different wrappers for the board control.
-        # Try the most specific clickable controls first and only accept a click
-        # once the real picker search field becomes visible.
+        # If the requested board is already selected, no picker interaction is
+        # needed. Only accept it when the text is visibly inside a clickable
+        # control, not merely somewhere else on the page.
+        desired_buttons = page.locator("button").filter(has_text=desired_board)
+        for index in range(desired_buttons.count()):
+            candidate = desired_buttons.nth(index)
+            try:
+                if candidate.is_visible():
+                    print(f"Pinterest board already selected: {desired_board}")
+                    return None
+            except Exception:
+                pass
+
+        # These are the boards currently managed by this automation. Pinterest
+        # normally shows the currently selected board as the dropdown button.
+        known_boards = [
+            "3D Printer Parts, Filament & Supplies",
+            "Vintage Honda Motorcycles",
+        ]
+
+        last_error = None
+
+        for current_board in known_boards:
+            board_text = page.get_by_text(current_board, exact=True)
+
+            for index in range(board_text.count()):
+                text_node = board_text.nth(index)
+
+                try:
+                    if not text_node.is_visible():
+                        continue
+
+                    # Click the nearest clickable ancestor containing the
+                    # visible board name.
+                    clickable = text_node.locator(
+                        'xpath=ancestor-or-self::*['
+                        'self::button or @role="button" or @aria-haspopup'
+                        '][1]'
+                    )
+
+                    if clickable.count() == 0:
+                        continue
+
+                    clickable.first.click()
+                    page.wait_for_timeout(300)
+
+                    picker_search.wait_for(
+                        state="visible",
+                        timeout=2500,
+                    )
+                    print(
+                        f"Opened Pinterest board dropdown from current board: "
+                        f"{current_board}"
+                    )
+                    return picker_search
+
+                except Exception as exc:
+                    last_error = exc
+
+        # Fallbacks for Pinterest UI variants where the visible board text is
+        # nested in an unusual wrapper.
         selectors = [
             '[data-test-id*="board"] button',
             '[data-test-id*="board"] [role="button"]',
@@ -69,18 +128,18 @@ class PinterestBrowserPublisher:
             'button:has-text("Select")',
         ]
 
-        last_error = None
-
         for selector in selectors:
             try:
                 candidates = page.locator(selector)
+
                 for index in range(candidates.count()):
                     candidate = candidates.nth(index)
+
                     if not candidate.is_visible():
                         continue
 
                     candidate.click()
-                    page.wait_for_timeout(250)
+                    page.wait_for_timeout(300)
 
                     try:
                         picker_search.wait_for(
@@ -90,8 +149,6 @@ class PinterestBrowserPublisher:
                         print("Opened Pinterest board dropdown.")
                         return picker_search
                     except Exception:
-                        # That click was not the board dropdown. Close any
-                        # accidental popover before trying the next candidate.
                         try:
                             page.keyboard.press("Escape")
                         except Exception:
@@ -101,8 +158,8 @@ class PinterestBrowserPublisher:
                 last_error = exc
 
         raise RuntimeError(
-            "Could not open Pinterest's board dropdown. "
-            f"Last error: {last_error}"
+            "Could not open Pinterest's board dropdown by clicking the "
+            f"currently displayed board name. Last error: {last_error}"
         )
 
     def _select_board(self, page, board_name):
@@ -110,7 +167,11 @@ class PinterestBrowserPublisher:
         Open Pinterest's board dropdown first, then search inside that picker
         and select the requested board exactly.
         """
-        board_search = self._open_board_picker(page)
+        board_search = self._open_board_picker(page, board_name)
+
+        # Requested board was already visibly selected.
+        if board_search is None:
+            return
 
         board_search.click()
         board_search.fill("")
@@ -119,7 +180,6 @@ class PinterestBrowserPublisher:
 
         exact_match = None
 
-        # Search only after the dropdown is confirmed open.
         text_matches = page.get_by_text(board_name, exact=True)
         for index in range(text_matches.count()):
             candidate = text_matches.nth(index)
@@ -169,11 +229,11 @@ class PinterestBrowserPublisher:
                     f"'{board_name}'."
                 ) from exc
 
+        selected_button = page.locator("button").filter(has_text=board_name)
         selected_visible = False
-        selected_text = page.get_by_text(board_name, exact=True)
 
-        for index in range(selected_text.count()):
-            candidate = selected_text.nth(index)
+        for index in range(selected_button.count()):
+            candidate = selected_button.nth(index)
             try:
                 if candidate.is_visible():
                     selected_visible = True
@@ -184,7 +244,7 @@ class PinterestBrowserPublisher:
         if not selected_visible:
             raise RuntimeError(
                 f"Pinterest did not visibly confirm board '{board_name}' "
-                f"after selection."
+                f"inside the board control after selection."
             )
 
         print(f"Selected Pinterest board: {board_name}")
