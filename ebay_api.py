@@ -128,7 +128,14 @@ class EbayAPI:
         except Exception:
             return 0
 
-    def search(self, category_name: str, query: str, category_id: str = "", limit: int = 20):
+    def search(
+        self,
+        category_name: str,
+        query: str,
+        category_id: str = "",
+        limit: int = 20,
+        progress_callback=None,
+    ):
         app_token = self.get_application_token()
         custom_id = f"pinterest-{uuid.uuid4().hex[:12]}"
 
@@ -154,15 +161,21 @@ class EbayAPI:
         response.raise_for_status()
         data = response.json()
 
+        items = data.get("itemSummaries", [])
+        total_items = len(items)
+
+        if progress_callback:
+            progress_callback(0, total_items, "Checking listing sales history")
+
         products = []
-        for item in data.get("itemSummaries", []):
+        for index, item in enumerate(items, start=1):
             rest_id = item.get("itemId", "")
             legacy_id = self._legacy_id(rest_id)
 
             try:
                 sold = self.get_quantity_sold(legacy_id)
             except Exception as exc:
-                print(f"  WARNING: sold count unavailable for {legacy_id}: {exc}")
+                print(f"\n  WARNING: sold count unavailable for {legacy_id}: {exc}")
                 sold = 0
 
             price = item.get("price", {}) or {}
@@ -193,5 +206,12 @@ class EbayAPI:
                 ),
                 condition=item.get("condition", ""),
             ))
+
+            if progress_callback:
+                progress_callback(
+                    index,
+                    total_items,
+                    f"Checked {index}/{total_items} listings",
+                )
 
         return products

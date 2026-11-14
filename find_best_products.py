@@ -53,50 +53,35 @@ def _matches_category(category, category_filter):
     return needle in name or needle in query
 
 
+def _progress_bar(current, total, width=28):
+    if total <= 0:
+        return "[" + ("-" * width) + "]"
+
+    ratio = min(max(current / total, 0.0), 1.0)
+    filled = int(width * ratio)
+    return "[" + ("#" * filled) + ("-" * (width - filled)) + "]"
+
+
 def collect_products(cfg, category_filter=None, vertical=None):
     require_ebay_config(cfg)
     api = EbayAPI(cfg["env"])
     search_cfg = cfg["search"]
 
+    print("[1/4] Refreshing eBay OAuth token...")
     api.token_manager.get_user_access_token(force_refresh=True)
+    print("      OAuth token ready.")
 
-    products = []
-    matched_categories = []
-
+    categories = []
     for category in cfg.get("categories", []):
         if not category.get("enabled", True):
             continue
-
         if not _matches_vertical(category, vertical):
             continue
-
         if not _matches_category(category, category_filter):
             continue
+        categories.append(category)
 
-        matched_categories.append(category["name"])
-
-        category_limit = int(
-            category.get(
-                "results_per_category",
-                search_cfg.get("results_per_category", 20),
-            )
-        )
-
-        print(f"Searching: {category['name']} ({category_limit} listings)")
-
-        results = api.search(
-            category_name=category["name"],
-            query=category.get("query", ""),
-            category_id=str(category.get("category_id", "") or ""),
-            limit=category_limit,
-        )
-
-        products.extend(
-            p for p in results
-            if passes_filters(p, search_cfg)
-        )
-
-    if (category_filter or vertical) and not matched_categories:
+    if (category_filter or vertical) and not categories:
         filters = []
         if vertical:
             filters.append(f"vertical={vertical!r}")
@@ -106,11 +91,59 @@ def collect_products(cfg, category_filter=None, vertical=None):
             "No enabled categories matched " + ", ".join(filters) + "."
         )
 
-    if matched_categories:
-        print(
-            f"\nSearched {len(matched_categories)} categor"
-            f"{'y' if len(matched_categories) == 1 else 'ies'}."
+    products = []
+    total_categories = len(categories)
+
+    print(f"[2/4] Searching {total_categories} categor{'y' if total_categories == 1 else 'ies'}...")
+
+    for category_index, category in enumerate(categories, start=1):
+        category_limit = int(
+            category.get(
+                "results_per_category",
+                search_cfg.get("results_per_category", 20),
+            )
         )
+
+        print(
+            f"\n  Category {category_index}/{total_categories}: "
+            f"{category['name']}"
+        )
+        print(f"  Query: {category.get('query', '')}")
+        print(f"  Requested listings: {category_limit}")
+
+        def on_progress(current, total, message):
+            bar = _progress_bar(current, total)
+            percent = int((current / total) * 100) if total else 0
+            print(
+                f"\r  {bar} {percent:3d}%  {message}",
+                end="",
+                flush=True,
+            )
+
+        results = api.search(
+            category_name=category["name"],
+            query=category.get("query", ""),
+            category_id=str(category.get("category_id", "") or ""),
+            limit=category_limit,
+            progress_callback=on_progress,
+        )
+        print()
+
+        passed = [
+            p for p in results
+            if passes_filters(p, search_cfg)
+        ]
+        products.extend(passed)
+
+        print(
+            f"  Finished {category['name']}: "
+            f"{len(passed)}/{len(results)} listings passed filters."
+        )
+
+    print(
+        f"\n[3/4] Search complete. "
+        f"{len(products)} eligible listings collected."
+    )
 
     return products
 

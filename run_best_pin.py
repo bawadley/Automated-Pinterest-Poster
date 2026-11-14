@@ -45,14 +45,16 @@ def main():
     args = parse_args()
     cfg = load_config()
 
+    print("\n=== eBay -> Pinterest Automation ===")
+
     if args.list_categories:
         print_categories(cfg)
         return
 
     if args.vertical:
-        print(f"Test filter: vertical = {args.vertical}")
+        print(f"Filter: vertical = {args.vertical}")
     if args.category:
-        print(f"Test filter: category contains = {args.category}")
+        print(f"Filter: category contains = {args.category}")
 
     products = collect_products(
         cfg,
@@ -60,6 +62,7 @@ def main():
         vertical=args.vertical,
     )
 
+    print("\n[4/4] Ranking eligible products...")
     selection_cfg = cfg.get("selection", {})
     top_count = int(selection_cfg.get("top_count", 5))
     weights = selection_cfg.get("weights", None)
@@ -77,6 +80,7 @@ def main():
     product = best["product"]
     score_info = best["score"]
 
+    print("      Best product selected.")
     print("\nSelected product:")
     print(product.title)
     print(f"Price: ${product.price:.2f}")
@@ -84,6 +88,7 @@ def main():
     print(f"Score: {score_info['total']:.3f}")
     print(f"Affiliate URL: {product.affiliate_url}")
 
+    print("\nPreparing Pinterest image, SEO copy, board, and topic tags...")
     draft = build_pin_draft(
         product=product,
         board_name=cfg["pinterest"]["board_name"],
@@ -91,13 +96,14 @@ def main():
         score_info=score_info,
     )
 
-    print("\nPin draft prepared.")
+    print("Pinterest draft ready.")
     print(f"SEO title: {draft.title}")
     print(f"Description: {draft.description}")
     print(f"Image: {draft.image_path}")
     print(f"Board: {draft.board_name}")
     print(f"Topic tags: {', '.join(draft.topics)}")
 
+    print("\nOpening Pinterest browser and populating the Pin form...")
     publisher = PinterestBrowserPublisher(cfg["pinterest"])
     publisher.publish_pin(draft)
 
