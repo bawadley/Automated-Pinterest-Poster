@@ -126,6 +126,125 @@ class PinterestBrowserPublisher:
         if not added_topics:
             print("No matching Pinterest topic tags were available; continuing without them.")
 
+    def _cleanup_matching_draft(self, page, title):
+        """
+        After a confirmed publish, remove only the leftover desktop draft whose
+        visible title exactly matches the Pin we just published. This is
+        intentionally best-effort and never deletes unrelated drafts.
+        """
+        try:
+            page.goto(
+                self.create_pin_url,
+                wait_until="domcontentloaded",
+                timeout=10000,
+            )
+            page.wait_for_timeout(1500)
+
+            title_matches = page.get_by_text(title, exact=True)
+            visible_match = None
+
+            for index in range(title_matches.count()):
+                candidate = title_matches.nth(index)
+                if candidate.is_visible():
+                    visible_match = candidate
+                    break
+
+            if visible_match is None:
+                print("No matching leftover draft found.")
+                return False
+
+            # Prefer a nearby draft container with its own checkbox.
+            containers = [
+                visible_match.locator(
+                    'xpath=ancestor::*[.//*[@role="checkbox"]][1]'
+                ),
+                visible_match.locator(
+                    'xpath=ancestor::*[.//input[@type="checkbox"]][1]'
+                ),
+                visible_match.locator(
+                    'xpath=ancestor::*[contains(@data-test-id, "draft")][1]'
+                ),
+            ]
+
+            draft_container = None
+            for container in containers:
+                try:
+                    if container.count() > 0 and container.first.is_visible():
+                        draft_container = container.first
+                        break
+                except Exception:
+                    pass
+
+            if draft_container is None:
+                print(
+                    "WARNING: Matching draft title was found, but its "
+                    "selection control could not be identified."
+                )
+                return False
+
+            checkbox = draft_container.locator(
+                '[role="checkbox"], input[type="checkbox"]'
+            ).first
+
+            if checkbox.count() == 0:
+                print(
+                    "WARNING: Matching draft was found, but no checkbox "
+                    "was available for safe deletion."
+                )
+                return False
+
+            checkbox.click()
+            page.wait_for_timeout(400)
+
+            delete_clicked = False
+            delete_selectors = [
+                'button[aria-label*="delete" i]',
+                'button[aria-label*="trash" i]',
+                '[data-test-id*="delete"]',
+                '[data-test-id*="trash"]',
+            ]
+
+            for selector in delete_selectors:
+                try:
+                    delete_button = page.locator(selector).first
+                    if delete_button.count() > 0 and delete_button.is_visible():
+                        delete_button.click()
+                        delete_clicked = True
+                        break
+                except Exception:
+                    pass
+
+            if not delete_clicked:
+                print(
+                    "WARNING: Matching draft was selected, but Pinterest's "
+                    "delete control was not found."
+                )
+                return False
+
+            page.wait_for_timeout(500)
+
+            # Confirm deletion if Pinterest opens a confirmation dialog.
+            try:
+                dialog = page.locator('[role="dialog"]').last
+                if dialog.count() > 0 and dialog.is_visible():
+                    confirm = dialog.get_by_role(
+                        "button",
+                        name="Delete",
+                        exact=True,
+                    )
+                    if confirm.count() > 0 and confirm.is_visible():
+                        confirm.click()
+            except Exception:
+                pass
+
+            page.wait_for_timeout(800)
+            print(f"Removed leftover Pinterest draft: {title}")
+            return True
+
+        except Exception as exc:
+            print(f"WARNING: Could not clean up matching Pinterest draft: {exc}")
+            return False
+
     def publish_pin(self, draft: PinDraft):
         image = Path(draft.image_path).resolve()
         if not image.exists():
@@ -256,9 +375,12 @@ class PinterestBrowserPublisher:
                     "before the timeout. The Pin may still have published."
                 )
 
-            # Give Pinterest a final moment to finish server-side draft cleanup,
-            # then leave the editor normally before closing the browser context.
+            # Give Pinterest a final moment to finish server-side draft cleanup.
             page.wait_for_timeout(2000)
+
+            if publish_confirmed:
+                self._cleanup_matching_draft(page, draft.title)
+
             try:
                 page.goto(
                     "https://www.pinterest.com/",
