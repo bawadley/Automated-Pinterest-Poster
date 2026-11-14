@@ -48,6 +48,81 @@ class PinterestBrowserPublisher:
                 last_error = exc
         raise RuntimeError(f"Could not find Pinterest {label}. Last error: {last_error}")
 
+    def _select_board(self, page, board_name):
+        """
+        Open Pinterest's board picker, search for the requested board by name,
+        and select an exact visible match. Never silently keep the previously
+        selected board when the requested board cannot be found.
+        """
+        self._click_first(page, [
+            '[data-test-id*="board"]',
+            'button[aria-label*="board" i]',
+            'button:has-text("Select")',
+        ], "board selector")
+
+        board_search = page.get_by_placeholder("Search through your boards")
+        board_search.wait_for(state="visible", timeout=5000)
+        board_search.click()
+        board_search.fill("")
+        board_search.fill(board_name)
+        page.wait_for_timeout(600)
+
+        exact_match = None
+
+        # Prefer board-picker results rather than matching text anywhere on
+        # the Pin editor page.
+        result_candidates = page.locator(
+            '[role="option"], [role="listbox"] button, '
+            '[data-test-id*="board"] button, [data-test-id*="board"] [role="button"]'
+        )
+
+        for index in range(result_candidates.count()):
+            candidate = result_candidates.nth(index)
+            try:
+                if not candidate.is_visible():
+                    continue
+                candidate_text = (candidate.inner_text() or "").strip()
+                if candidate_text.casefold() == board_name.casefold():
+                    exact_match = candidate
+                    break
+            except Exception:
+                pass
+
+        if exact_match is None:
+            text_matches = page.get_by_text(board_name, exact=True)
+            for index in range(text_matches.count()):
+                candidate = text_matches.nth(index)
+                try:
+                    if candidate.is_visible():
+                        exact_match = candidate
+                        break
+                except Exception:
+                    pass
+
+        if exact_match is None:
+            raise RuntimeError(
+                f"Pinterest board '{board_name}' was not found in the board picker."
+            )
+
+        exact_match.click()
+        page.wait_for_timeout(300)
+
+        # Confirm the picker actually closed. If it remains open, try Escape
+        # once, then fail rather than risking a post to the wrong board.
+        try:
+            board_search.wait_for(state="hidden", timeout=3000)
+        except Exception:
+            page.keyboard.press("Escape")
+            try:
+                board_search.wait_for(state="hidden", timeout=1500)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Pinterest board picker did not close after selecting "
+                    f"'{board_name}'."
+                ) from exc
+
+        print(f"Selected Pinterest board: {board_name}")
+
     def _add_topic_tags(self, page, topics):
         """
         Search Pinterest's live topic suggestions and only select an exact
@@ -300,44 +375,14 @@ class PinterestBrowserPublisher:
             board_name = draft.board_name.strip()
             if board_name:
                 try:
-                    self._click_first(page, [
-                        '[data-test-id*="board"]',
-                        'button[aria-label*="board" i]',
-                        'button:has-text("Select")',
-                    ], "board selector")
-                    option = page.get_by_text(board_name, exact=True).first
-                    option.wait_for(state="visible", timeout=8000)
-                    option.click()
-
-                    # Pinterest's board picker can remain open briefly after a
-                    # board is selected. If topic-tag automation starts while
-                    # that overlay is still present, it intercepts clicks and
-                    # Playwright can retry for the full default timeout.
-                    board_search = page.get_by_placeholder(
-                        "Search through your boards"
-                    )
-                    try:
-                        board_search.wait_for(
-                            state="hidden",
-                            timeout=3000,
-                        )
-                    except Exception:
-                        try:
-                            page.keyboard.press("Escape")
-                            board_search.wait_for(
-                                state="hidden",
-                                timeout=1500,
-                            )
-                        except Exception:
-                            pass
-
-                    page.wait_for_timeout(250)
+                    self._select_board(page, board_name)
                 except Exception as exc:
-                    print(
-                        f"WARNING: Could not automatically choose board "
-                        f"'{board_name}': {exc}"
-                    )
-                    print("Choose the board manually before continuing.")
+                    context.close()
+                    raise RuntimeError(
+                        f"Could not select required Pinterest board "
+                        f"'{board_name}'. Stopping to avoid posting to the "
+                        f"wrong board. Details: {exc}"
+                    ) from exc
 
             self._add_topic_tags(page, draft.topics)
 
