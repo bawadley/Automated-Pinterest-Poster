@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 
 @dataclass
@@ -29,3 +29,4 @@ class PinDraft:
     affiliate_url: str
     image_path: str
     board_name: str
+    topics: list[str] = field(default_factory=list)

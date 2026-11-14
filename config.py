@@ -30,7 +30,10 @@ def load_config():
     }
 
     cfg["pinterest"] = {
-        "board_name": os.getenv("PINTEREST_BOARD_NAME", "3D Printer Parts"),
+        "board_name": os.getenv(
+            "PINTEREST_BOARD_NAME",
+            "Vintage Honda Motorcycle Parts",
+        ),
         "profile_dir": os.getenv("PINTEREST_PROFILE_DIR", "data/pinterest_profile"),
         "headless": _as_bool(os.getenv("PINTEREST_HEADLESS", "false")),
         "dry_run": _as_bool(os.getenv("PINTEREST_DRY_RUN", "true"), True),

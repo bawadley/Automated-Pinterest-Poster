@@ -49,6 +49,61 @@ class PinterestBrowserPublisher:
                 last_error = exc
         raise RuntimeError(f"Could not find Pinterest {label}. Last error: {last_error}")
 
+    def _add_topic_tags(self, page, topics):
+        """
+        Topic tags are useful for discovery, but Pinterest's available topics
+        are dynamic. This is deliberately best-effort so a missing topic never
+        blocks an otherwise valid Pin.
+        """
+        if not topics:
+            return
+
+        try:
+            topic_input = page.get_by_placeholder("Search for a tag")
+            topic_input.wait_for(state="visible", timeout=4000)
+        except Exception as exc:
+            print(f"WARNING: Topic-tag field was not available: {exc}")
+            return
+
+        added = 0
+
+        for topic in topics[:10]:
+            try:
+                topic_input.click()
+                topic_input.fill(topic)
+                page.wait_for_timeout(700)
+
+                exact_match = page.get_by_text(topic, exact=True)
+                if exact_match.count() > 0:
+                    candidate = exact_match.last
+                    candidate.wait_for(state="visible", timeout=2000)
+                    candidate.click()
+                    added += 1
+                    page.wait_for_timeout(250)
+                    continue
+
+                options = page.locator('[role="option"]')
+                if options.count() > 0:
+                    candidate = options.first
+                    candidate_text = (candidate.inner_text() or "").strip()
+                    if candidate_text:
+                        candidate.click()
+                        added += 1
+                        page.wait_for_timeout(250)
+                        continue
+
+                topic_input.fill("")
+            except Exception:
+                try:
+                    topic_input.fill("")
+                except Exception:
+                    pass
+
+        if added:
+            print(f"Added {added} Pinterest topic tag(s).")
+        else:
+            print("No matching Pinterest topic tags were available; continuing without them.")
+
     def publish_pin(self, draft: PinDraft):
         image = Path(draft.image_path).resolve()
         if not image.exists():
@@ -116,6 +171,8 @@ class PinterestBrowserPublisher:
                         f"'{board_name}': {exc}"
                     )
                     print("Choose the board manually before continuing.")
+
+            self._add_topic_tags(page, draft.topics)
 
             print("Pin form populated.")
 

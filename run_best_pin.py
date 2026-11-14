@@ -41,8 +41,11 @@ def main():
     )
 
     print("\nPin draft prepared.")
+    print(f"SEO title: {draft.title}")
+    print(f"Description: {draft.description}")
     print(f"Image: {draft.image_path}")
     print(f"Board: {draft.board_name}")
+    print(f"Topic tags: {', '.join(draft.topics)}")
 
     publisher = PinterestBrowserPublisher(cfg["pinterest"])
     publisher.publish_pin(draft)
