@@ -48,41 +48,78 @@ class PinterestBrowserPublisher:
                 last_error = exc
         raise RuntimeError(f"Could not find Pinterest {label}. Last error: {last_error}")
 
+    def _open_board_picker(self, page):
+        """
+        Open Pinterest's board dropdown and verify that the board picker is
+        actually open before attempting to search for a board.
+        """
+        picker_search = page.locator(
+            '#pickerSearchField, input[placeholder="Search through your boards"]'
+        ).first
+
+        # Pinterest has used several different wrappers for the board control.
+        # Try the most specific clickable controls first and only accept a click
+        # once the real picker search field becomes visible.
+        selectors = [
+            '[data-test-id*="board"] button',
+            '[data-test-id*="board"] [role="button"]',
+            'button[aria-label*="board" i]',
+            'button[aria-haspopup="listbox"]',
+            'button[aria-haspopup="dialog"]',
+            'button:has-text("Select")',
+        ]
+
+        last_error = None
+
+        for selector in selectors:
+            try:
+                candidates = page.locator(selector)
+                for index in range(candidates.count()):
+                    candidate = candidates.nth(index)
+                    if not candidate.is_visible():
+                        continue
+
+                    candidate.click()
+                    page.wait_for_timeout(250)
+
+                    try:
+                        picker_search.wait_for(
+                            state="visible",
+                            timeout=1500,
+                        )
+                        print("Opened Pinterest board dropdown.")
+                        return picker_search
+                    except Exception:
+                        # That click was not the board dropdown. Close any
+                        # accidental popover before trying the next candidate.
+                        try:
+                            page.keyboard.press("Escape")
+                        except Exception:
+                            pass
+
+            except Exception as exc:
+                last_error = exc
+
+        raise RuntimeError(
+            "Could not open Pinterest's board dropdown. "
+            f"Last error: {last_error}"
+        )
+
     def _select_board(self, page, board_name):
         """
-        Open Pinterest's board picker and select the requested board exactly.
-        Pinterest renders the picker differently across sessions, so support
-        both searchable and directly visible board lists.
+        Open Pinterest's board dropdown first, then search inside that picker
+        and select the requested board exactly.
         """
-        self._click_first(page, [
-            '[data-test-id*="board"]',
-            'button[aria-label*="board" i]',
-            'button:has-text("Select")',
-        ], "board selector")
+        board_search = self._open_board_picker(page)
 
-        page.wait_for_timeout(400)
-
-        board_search = page.get_by_placeholder("Search through your boards")
-        search_available = False
-
-        try:
-            if board_search.count() > 0 and board_search.first.is_visible():
-                search_available = True
-        except Exception:
-            search_available = False
-
-        if search_available:
-            board_search = board_search.first
-            board_search.click()
-            board_search.fill("")
-            board_search.fill(board_name)
-            page.wait_for_timeout(600)
+        board_search.click()
+        board_search.fill("")
+        board_search.fill(board_name)
+        page.wait_for_timeout(700)
 
         exact_match = None
 
-        # First look for exact visible text anywhere inside the currently
-        # opened picker. This handles Pinterest variants that show boards
-        # directly without a search box.
+        # Search only after the dropdown is confirmed open.
         text_matches = page.get_by_text(board_name, exact=True)
         for index in range(text_matches.count()):
             candidate = text_matches.nth(index)
@@ -93,13 +130,10 @@ class PinterestBrowserPublisher:
             except Exception:
                 pass
 
-        # If exact text was not exposed as its own node, inspect likely picker
-        # buttons/options and compare their visible text.
         if exact_match is None:
             result_candidates = page.locator(
                 '[role="option"], [role="listbox"] button, '
-                '[role="dialog"] button, [data-test-id*="board"] button, '
-                '[data-test-id*="board"] [role="button"]'
+                '[role="dialog"] button, [role="menu"] button'
             )
 
             for index in range(result_candidates.count()):
@@ -116,30 +150,28 @@ class PinterestBrowserPublisher:
 
         if exact_match is None:
             raise RuntimeError(
-                f"Pinterest board '{board_name}' was not found in the open board picker."
+                f"Pinterest board '{board_name}' was not found after opening "
+                f"the board dropdown and searching for it."
             )
 
         exact_match.click()
         page.wait_for_timeout(400)
 
-        # If a searchable picker is still visible, close it once. If there was
-        # no search field, verify the selected board text is now visible in the
-        # editor before continuing.
-        if search_available:
+        try:
+            board_search.wait_for(state="hidden", timeout=3000)
+        except Exception:
+            page.keyboard.press("Escape")
             try:
-                board_search.wait_for(state="hidden", timeout=3000)
-            except Exception:
-                page.keyboard.press("Escape")
-                try:
-                    board_search.wait_for(state="hidden", timeout=1500)
-                except Exception as exc:
-                    raise RuntimeError(
-                        f"Pinterest board picker did not close after selecting "
-                        f"'{board_name}'."
-                    ) from exc
+                board_search.wait_for(state="hidden", timeout=1500)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Pinterest board dropdown did not close after selecting "
+                    f"'{board_name}'."
+                ) from exc
 
         selected_visible = False
         selected_text = page.get_by_text(board_name, exact=True)
+
         for index in range(selected_text.count()):
             candidate = selected_text.nth(index)
             try:
