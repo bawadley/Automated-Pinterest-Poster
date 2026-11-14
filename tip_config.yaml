@@ -167,7 +167,7 @@ tip_categories:
 
   - name: "Honda CB750 Restoration Tips"
     vertical: "honda"
-    board: "Vintage Honda Motorcycle Parts"
+    board: "Vintage Honda Motorcycles"
     topics:
       - "Motorcycles"
     tips:
@@ -201,7 +201,7 @@ tip_categories:
 
   - name: "Honda CB750 Parts Buying Tips"
     vertical: "honda"
-    board: "Vintage Honda Motorcycle Parts"
+    board: "Vintage Honda Motorcycles"
     topics:
       - "Motorcycles"
     tips:
@@ -268,7 +268,7 @@ tip_categories:
   - name: "Honda CB750 Community Humor"
     vertical: "honda"
     content_type: "quote"
-    board: "Vintage Honda Motorcycle Parts"
+    board: "Vintage Honda Motorcycles"
     topics:
       - "Motorcycles"
     tips:
@@ -345,7 +345,7 @@ tip_categories:
   - name: "Honda CB750 Community Questions"
     vertical: "honda"
     content_type: "question"
-    board: "Vintage Honda Motorcycle Parts"
+    board: "Vintage Honda Motorcycles"
     topics:
       - "Motorcycles"
     tips:
@@ -456,7 +456,7 @@ tip_categories:
   - name: "Honda CB750 Knowledge Quizzes"
     vertical: "honda"
     content_type: "quiz"
-    board: "Vintage Honda Motorcycle Parts"
+    board: "Vintage Honda Motorcycles"
     topics:
       - "Motorcycles"
     tips:
