@@ -14,9 +14,12 @@ def parse_args():
     )
     parser.add_argument(
         "--category",
+        action="append",
+        dest="categories",
         help=(
             "Search only categories whose name/query contains this text. "
-            "Example: --category \"PLA Filament\""
+            "Repeat --category to search multiple categories in one run. "
+            "Example: --category \"PLA Filament\" --category \"Bambu Lab Parts\""
         ),
     )
     parser.add_argument(
@@ -54,8 +57,11 @@ def main():
 
     if args.vertical:
         print(f"Filter: vertical = {args.vertical}")
-    if args.category:
-        print(f"Filter: category contains = {args.category}")
+    if args.categories:
+        print(
+            "Filter: categories contain = "
+            + ", ".join(args.categories)
+        )
 
     selection_cfg = cfg.get("selection", {})
     cooldown_days = int(selection_cfg.get("cooldown_days", 90))
@@ -78,7 +84,7 @@ def main():
 
     products = collect_products(
         cfg,
-        category_filter=args.category,
+        category_filter=args.categories,
         vertical=args.vertical,
         excluded_ids=excluded_ids,
     )

@@ -46,11 +46,21 @@ def _matches_category(category, category_filter):
     if not category_filter:
         return True
 
-    needle = category_filter.strip().lower()
+    filters = (
+        category_filter
+        if isinstance(category_filter, (list, tuple, set))
+        else [category_filter]
+    )
+
     name = category.get("name", "").lower()
     query = category.get("query", "").lower()
 
-    return needle in name or needle in query
+    for value in filters:
+        needle = str(value).strip().lower()
+        if needle and (needle in name or needle in query):
+            return True
+
+    return False
 
 
 def _progress_bar(current, total, width=28):
