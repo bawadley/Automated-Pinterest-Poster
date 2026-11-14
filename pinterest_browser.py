@@ -12,6 +12,12 @@ class PinterestBrowserPublisher:
         self.headless = bool(config.get("headless", False))
         self.dry_run = bool(config.get("dry_run", True))
         self.timeout_ms = int(config.get("timeout_ms", 30000))
+        self.topic_search_delay_ms = int(
+            config.get("topic_search_delay_ms", 1800)
+        )
+        self.topic_select_delay_ms = int(
+            config.get("topic_select_delay_ms", 1200)
+        )
         self.create_pin_url = config.get(
             "create_pin_url",
             "https://www.pinterest.com/pin-creation-tool/",
@@ -70,8 +76,10 @@ class PinterestBrowserPublisher:
         for topic in topics[:10]:
             try:
                 topic_input.click()
+                topic_input.fill("")
+                page.wait_for_timeout(300)
                 topic_input.fill(topic)
-                page.wait_for_timeout(700)
+                page.wait_for_timeout(self.topic_search_delay_ms)
 
                 exact_match = page.get_by_text(topic, exact=True)
                 if exact_match.count() > 0:
@@ -79,7 +87,7 @@ class PinterestBrowserPublisher:
                     candidate.wait_for(state="visible", timeout=2000)
                     candidate.click()
                     added += 1
-                    page.wait_for_timeout(250)
+                    page.wait_for_timeout(self.topic_select_delay_ms)
                     continue
 
                 options = page.locator('[role="option"]')
@@ -89,7 +97,7 @@ class PinterestBrowserPublisher:
                     if candidate_text:
                         candidate.click()
                         added += 1
-                        page.wait_for_timeout(250)
+                        page.wait_for_timeout(self.topic_select_delay_ms)
                         continue
 
                 topic_input.fill("")
@@ -100,6 +108,7 @@ class PinterestBrowserPublisher:
                     pass
 
         if added:
+            page.wait_for_timeout(self.topic_select_delay_ms)
             print(f"Added {added} Pinterest topic tag(s).")
         else:
             print("No matching Pinterest topic tags were available; continuing without them.")
