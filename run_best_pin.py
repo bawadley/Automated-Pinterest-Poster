@@ -2,6 +2,7 @@ import argparse
 
 from config import load_config
 from find_best_products import collect_products
+from history_db import PostedHistory
 from selector import select_top_products
 from pin_builder import build_pin_draft
 from pinterest_browser import PinterestBrowserPublisher
@@ -56,14 +57,33 @@ def main():
     if args.category:
         print(f"Filter: category contains = {args.category}")
 
+    selection_cfg = cfg.get("selection", {})
+    cooldown_days = int(selection_cfg.get("cooldown_days", 90))
+    history_path = selection_cfg.get(
+        "history_db_path",
+        "data/posted_history.db",
+    )
+
+    history = PostedHistory(history_path)
+    excluded_ids = history.recent_item_ids(cooldown_days)
+
+    print(
+        f"Posted-history database: {history_path} "
+        f"({history.posted_count()} total saved)"
+    )
+    print(
+        f"Cooldown: {cooldown_days} days | "
+        f"{len(excluded_ids)} recent item ID(s) excluded"
+    )
+
     products = collect_products(
         cfg,
         category_filter=args.category,
         vertical=args.vertical,
+        excluded_ids=excluded_ids,
     )
 
     print("\n[4/4] Ranking eligible products...")
-    selection_cfg = cfg.get("selection", {})
     top_count = int(selection_cfg.get("top_count", 5))
     weights = selection_cfg.get("weights", None)
 
@@ -74,13 +94,16 @@ def main():
     )
 
     if not selected:
-        raise RuntimeError("No eligible eBay products were found.")
+        raise RuntimeError(
+            "No fresh eligible eBay products were found. "
+            "Try a larger search limit, another category, or wait for new listings."
+        )
 
     best = selected[0]
     product = best["product"]
     score_info = best["score"]
 
-    print("      Best product selected.")
+    print("      Best fresh product selected.")
     print("\nSelected product:")
     print(product.title)
     print(f"Price: ${product.price:.2f}")
@@ -105,7 +128,22 @@ def main():
 
     print("\nOpening Pinterest browser and populating the Pin form...")
     publisher = PinterestBrowserPublisher(cfg["pinterest"])
-    publisher.publish_pin(draft)
+    published = publisher.publish_pin(draft)
+
+    if published:
+        history.mark_posted(product, score=score_info)
+        print(
+            f"Saved eBay item {product.legacy_item_id or product.item_id} "
+            f"to posted history."
+        )
+        print(
+            f"It will be excluded from selection for the next "
+            f"{cooldown_days} days."
+        )
+    else:
+        print(
+            "Dry run / no confirmed publish: item was NOT added to posted history."
+        )
 
 
 if __name__ == "__main__":

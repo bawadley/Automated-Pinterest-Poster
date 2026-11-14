@@ -62,7 +62,12 @@ def _progress_bar(current, total, width=28):
     return "[" + ("#" * filled) + ("-" * (width - filled)) + "]"
 
 
-def collect_products(cfg, category_filter=None, vertical=None):
+def collect_products(
+    cfg,
+    category_filter=None,
+    vertical=None,
+    excluded_ids=None,
+):
     require_ebay_config(cfg)
     api = EbayAPI(cfg["env"])
     search_cfg = cfg["search"]
@@ -126,6 +131,7 @@ def collect_products(cfg, category_filter=None, vertical=None):
             category_id=str(category.get("category_id", "") or ""),
             limit=category_limit,
             progress_callback=on_progress,
+            excluded_ids=excluded_ids,
         )
         print()
 

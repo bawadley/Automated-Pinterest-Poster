@@ -176,9 +176,11 @@ class EbayAPI:
         category_id: str = "",
         limit: int = 20,
         progress_callback=None,
+        excluded_ids=None,
     ):
         app_token = self.get_application_token()
         custom_id = f"pinterest-{uuid.uuid4().hex[:12]}"
+        excluded_ids = {str(value) for value in (excluded_ids or set()) if value}
 
         headers = {
             "Authorization": f"Bearer {app_token}",
@@ -189,27 +191,68 @@ class EbayAPI:
             ),
         }
 
-        params = {"q": query, "limit": min(max(int(limit), 1), 200)}
-        if category_id:
-            params["category_ids"] = category_id
+        target_count = min(max(int(limit), 1), 200)
+        scan_page_size = min(max(target_count, 50), 200)
+        offset = 0
+        fresh_items = []
+        skipped_posted = 0
 
-        response = requests.get(
-            BROWSE_SEARCH_URL,
-            headers=headers,
-            params=params,
-            timeout=30,
-        )
-        response.raise_for_status()
-        data = response.json()
+        # Scan eBay's Best Match results in pages. Already-posted item IDs are
+        # skipped before the slower Trading API detail lookup, and pagination
+        # continues until we have a full fresh candidate batch.
+        while len(fresh_items) < target_count:
+            params = {
+                "q": query,
+                "limit": scan_page_size,
+                "offset": offset,
+            }
+            if category_id:
+                params["category_ids"] = category_id
 
-        items = data.get("itemSummaries", [])
-        total_items = len(items)
+            response = requests.get(
+                BROWSE_SEARCH_URL,
+                headers=headers,
+                params=params,
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            items = data.get("itemSummaries", [])
+            if not items:
+                break
+
+            for item in items:
+                rest_id = item.get("itemId", "")
+                legacy_id = self._legacy_id(rest_id)
+
+                if rest_id in excluded_ids or legacy_id in excluded_ids:
+                    skipped_posted += 1
+                    continue
+
+                fresh_items.append(item)
+                if len(fresh_items) >= target_count:
+                    break
+
+            total_available = int(data.get("total", 0) or 0)
+            offset += scan_page_size
+
+            if offset >= total_available or len(items) < scan_page_size:
+                break
+
+        if skipped_posted:
+            print(
+                f"  Skipped {skipped_posted} previously posted "
+                f"listing{'s' if skipped_posted != 1 else ''}."
+            )
+
+        total_items = len(fresh_items)
 
         if progress_callback:
-            progress_callback(0, total_items, "Checking listing details")
+            progress_callback(0, total_items, "Checking fresh listing details")
 
         products = []
-        for index, item in enumerate(items, start=1):
+        for index, item in enumerate(fresh_items, start=1):
             rest_id = item.get("itemId", "")
             legacy_id = self._legacy_id(rest_id)
 
@@ -227,8 +270,6 @@ class EbayAPI:
             search_image = item.get("image", {}) or {}
             cats = item.get("categories", []) or []
 
-            # Prefer the actual listing/gallery image returned by GetItem.
-            # Fall back to the Browse search thumbnail only when necessary.
             image_url = (
                 listing_image_url
                 or self._prefer_large_ebay_image(search_image.get("imageUrl", ""))
@@ -262,7 +303,7 @@ class EbayAPI:
                 progress_callback(
                     index,
                     total_items,
-                    f"Checked {index}/{total_items} listings",
+                    f"Checked {index}/{total_items} fresh listings",
                 )
 
         return products
