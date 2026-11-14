@@ -12,12 +12,6 @@ class PinterestBrowserPublisher:
         self.headless = bool(config.get("headless", False))
         self.dry_run = bool(config.get("dry_run", True))
         self.timeout_ms = int(config.get("timeout_ms", 30000))
-        self.topic_search_delay_ms = int(
-            config.get("topic_search_delay_ms", 1800)
-        )
-        self.topic_select_delay_ms = int(
-            config.get("topic_select_delay_ms", 1200)
-        )
         self.create_pin_url = config.get(
             "create_pin_url",
             "https://www.pinterest.com/pin-creation-tool/",
@@ -57,9 +51,9 @@ class PinterestBrowserPublisher:
 
     def _add_topic_tags(self, page, topics):
         """
-        Topic tags are useful for discovery, but Pinterest's available topics
-        are dynamic. This is deliberately best-effort so a missing topic never
-        blocks an otherwise valid Pin.
+        Search Pinterest's live topic suggestions and only select an exact
+        matching topic. Missing topics are skipped instead of choosing an
+        unrelated fallback suggestion.
         """
         if not topics:
             return
@@ -71,46 +65,66 @@ class PinterestBrowserPublisher:
             print(f"WARNING: Topic-tag field was not available: {exc}")
             return
 
-        added = 0
+        added_topics = []
+        skipped_topics = []
 
         for topic in topics[:10]:
             try:
                 topic_input.click()
                 topic_input.fill("")
-                page.wait_for_timeout(300)
                 topic_input.fill(topic)
-                page.wait_for_timeout(self.topic_search_delay_ms)
+                page.wait_for_timeout(700)
 
-                exact_match = page.get_by_text(topic, exact=True)
-                if exact_match.count() > 0:
-                    candidate = exact_match.last
-                    candidate.wait_for(state="visible", timeout=2000)
-                    candidate.click()
-                    added += 1
-                    page.wait_for_timeout(self.topic_select_delay_ms)
+                candidates = page.locator('[role="option"]')
+                match = None
+
+                for index in range(candidates.count()):
+                    candidate = candidates.nth(index)
+                    candidate_text = (candidate.inner_text() or "").strip()
+                    if candidate_text.casefold() == topic.strip().casefold():
+                        match = candidate
+                        break
+
+                if match is None:
+                    exact_text = page.get_by_text(topic, exact=True)
+                    for index in range(exact_text.count()):
+                        candidate = exact_text.nth(index)
+                        if candidate.is_visible():
+                            match = candidate
+                            break
+
+                if match is None:
+                    skipped_topics.append(topic)
+                    topic_input.fill("")
+                    print(f"  Topic not available on Pinterest: {topic}")
                     continue
 
-                options = page.locator('[role="option"]')
-                if options.count() > 0:
-                    candidate = options.first
-                    candidate_text = (candidate.inner_text() or "").strip()
-                    if candidate_text:
-                        candidate.click()
-                        added += 1
-                        page.wait_for_timeout(self.topic_select_delay_ms)
-                        continue
+                match.wait_for(state="visible", timeout=2000)
+                match.click()
+                added_topics.append(topic)
+                page.wait_for_timeout(250)
 
-                topic_input.fill("")
-            except Exception:
+            except Exception as exc:
+                skipped_topics.append(topic)
+                print(f"  Skipped topic '{topic}': {exc}")
                 try:
                     topic_input.fill("")
                 except Exception:
                     pass
 
-        if added:
-            page.wait_for_timeout(self.topic_select_delay_ms)
-            print(f"Added {added} Pinterest topic tag(s).")
-        else:
+        if added_topics:
+            print(
+                "Added Pinterest topic tags: "
+                + ", ".join(added_topics)
+            )
+
+        if skipped_topics:
+            print(
+                "Skipped unavailable Pinterest topics: "
+                + ", ".join(skipped_topics)
+            )
+
+        if not added_topics:
             print("No matching Pinterest topic tags were available; continuing without them.")
 
     def publish_pin(self, draft: PinDraft):

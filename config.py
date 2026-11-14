@@ -38,12 +38,6 @@ def load_config():
         "headless": _as_bool(os.getenv("PINTEREST_HEADLESS", "false")),
         "dry_run": _as_bool(os.getenv("PINTEREST_DRY_RUN", "true"), True),
         "timeout_ms": int(os.getenv("PINTEREST_TIMEOUT_MS", "30000")),
-        "topic_search_delay_ms": int(
-            os.getenv("PINTEREST_TOPIC_SEARCH_DELAY_MS", "1800")
-        ),
-        "topic_select_delay_ms": int(
-            os.getenv("PINTEREST_TOPIC_SELECT_DELAY_MS", "1200")
-        ),
         "create_pin_url": os.getenv(
             "PINTEREST_CREATE_PIN_URL",
             "https://www.pinterest.com/pin-creation-tool/",
