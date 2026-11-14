@@ -3,7 +3,7 @@ import argparse
 from config import load_config
 from find_best_products import collect_products
 from history_db import PostedHistory
-from selector import select_top_products
+from selector import rank_products, select_top_products
 from pin_builder import build_pin_draft
 from pinterest_browser import PinterestBrowserPublisher
 
@@ -93,11 +93,44 @@ def main():
     top_count = int(selection_cfg.get("top_count", 5))
     weights = selection_cfg.get("weights", None)
 
-    selected = select_top_products(
-        products,
-        count=top_count,
-        weights=weights,
-    )
+    if args.categories and len(args.categories) > 1:
+        # Explicit multi-category mode: post one best fresh product from each
+        # matched search category instead of choosing only one overall winner.
+        ranked = rank_products(products, weights=weights)
+        winners = []
+        used_ids = set()
+
+        matched_categories = []
+        for product in products:
+            if product.search_category not in matched_categories:
+                matched_categories.append(product.search_category)
+
+        for category_name in matched_categories:
+            for row in ranked:
+                product = row["product"]
+                if product.search_category != category_name:
+                    continue
+
+                product_id = product.item_id or product.legacy_item_id
+                if product_id in used_ids:
+                    continue
+
+                winners.append(row)
+                used_ids.add(product_id)
+                break
+
+        selected = winners
+        print(
+            f"      Multi-category mode: selected "
+            f"{len(selected)} category winner(s)."
+        )
+    else:
+        selected = select_top_products(
+            products,
+            count=top_count,
+            weights=weights,
+        )
+        selected = selected[:1]
 
     if not selected:
         raise RuntimeError(
@@ -105,51 +138,59 @@ def main():
             "Try a larger search limit, another category, or wait for new listings."
         )
 
-    best = selected[0]
-    product = best["product"]
-    score_info = best["score"]
+    total_to_post = len(selected)
 
-    print("      Best fresh product selected.")
-    print("\nSelected product:")
-    print(product.title)
-    print(f"Price: ${product.price:.2f}")
-    print(f"Sold: {product.quantity_sold}")
-    print(f"Score: {score_info['total']:.3f}")
-    print(f"Affiliate URL: {product.affiliate_url}")
+    for post_index, best in enumerate(selected, start=1):
+        product = best["product"]
+        score_info = best["score"]
 
-    print("\nPreparing Pinterest image, SEO copy, board, and topic tags...")
-    draft = build_pin_draft(
-        product=product,
-        board_name=cfg["pinterest"]["board_name"],
-        board_map=cfg.get("pinterest_boards", {}),
-        score_info=score_info,
-    )
-
-    print("Pinterest draft ready.")
-    print(f"SEO title: {draft.title}")
-    print(f"Description: {draft.description}")
-    print(f"Image: {draft.image_path}")
-    print(f"Board: {draft.board_name}")
-    print(f"Topic tags: {', '.join(draft.topics)}")
-
-    print("\nOpening Pinterest browser and populating the Pin form...")
-    publisher = PinterestBrowserPublisher(cfg["pinterest"])
-    published = publisher.publish_pin(draft)
-
-    if published:
-        history.mark_posted(product, score=score_info)
         print(
-            f"Saved eBay item {product.legacy_item_id or product.item_id} "
-            f"to posted history."
+            f"\n=== Pin {post_index}/{total_to_post}: "
+            f"{product.search_category} ==="
         )
-        print(
-            f"It will be excluded from selection for the next "
-            f"{cooldown_days} days."
+        print("Selected product:")
+        print(product.title)
+        print(f"Price: ${product.price:.2f}")
+        print(f"Sold: {product.quantity_sold}")
+        print(f"Score: {score_info['total']:.3f}")
+        print(f"Affiliate URL: {product.affiliate_url}")
+
+        print("\nPreparing Pinterest image, SEO copy, board, and topic tags...")
+        draft = build_pin_draft(
+            product=product,
+            board_name=cfg["pinterest"]["board_name"],
+            board_map=cfg.get("pinterest_boards", {}),
+            score_info=score_info,
         )
-    else:
-        print(
-            "Dry run / no confirmed publish: item was NOT added to posted history."
-        )
+
+        print("Pinterest draft ready.")
+        print(f"SEO title: {draft.title}")
+        print(f"Description: {draft.description}")
+        print(f"Image: {draft.image_path}")
+        print(f"Board: {draft.board_name}")
+        print(f"Topic tags: {', '.join(draft.topics)}")
+
+        print("\nOpening Pinterest browser and populating the Pin form...")
+        publisher = PinterestBrowserPublisher(cfg["pinterest"])
+        published = publisher.publish_pin(draft)
+
+        if published:
+            history.mark_posted(product, score=score_info)
+            print(
+                f"Saved eBay item {product.legacy_item_id or product.item_id} "
+                f"to posted history."
+            )
+            print(
+                f"It will be excluded from selection for the next "
+                f"{cooldown_days} days."
+            )
+        else:
+            print(
+                "Dry run / no confirmed publish: item was NOT added to posted history."
+            )
+
+    if total_to_post > 1:
+        print(f"\nFinished multi-category run: processed {total_to_post} Pins.")
 
 
 if __name__ == "__main__":
