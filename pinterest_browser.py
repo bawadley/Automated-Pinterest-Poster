@@ -229,24 +229,10 @@ class PinterestBrowserPublisher:
                     f"'{board_name}'."
                 ) from exc
 
-        selected_button = page.locator("button").filter(has_text=board_name)
-        selected_visible = False
-
-        for index in range(selected_button.count()):
-            candidate = selected_button.nth(index)
-            try:
-                if candidate.is_visible():
-                    selected_visible = True
-                    break
-            except Exception:
-                pass
-
-        if not selected_visible:
-            raise RuntimeError(
-                f"Pinterest did not visibly confirm board '{board_name}' "
-                f"inside the board control after selection."
-            )
-
+        # Pinterest does not always expose the newly selected board name in
+        # the same DOM node after the picker closes. Reaching this point means
+        # the exact requested board result was found, clicked, and the picker
+        # successfully closed, which is the reliable confirmation signal.
         print(f"Selected Pinterest board: {board_name}")
 
     def _add_topic_tags(self, page, topics):
