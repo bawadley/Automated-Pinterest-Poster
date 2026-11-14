@@ -37,6 +37,7 @@ def main():
     draft = build_pin_draft(
         product=product,
         board_name=cfg["pinterest"]["board_name"],
+        board_map=cfg.get("pinterest_boards", {}),
         score_info=score_info,
     )
 

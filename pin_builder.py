@@ -339,26 +339,41 @@ def build_topic_tags(product) -> list[str]:
     return topics[:10]
 
 
-def resolve_board_name(product, default_board="") -> str:
+def resolve_board_name(product, default_board="", board_map=None) -> str:
     text = _combined_text(product)
+    board_map = board_map or {}
+
+    honda_board = board_map.get("honda", HONDA_BOARD_NAME)
+    filament_board = board_map.get("filament", FILAMENT_BOARD_NAME)
+    bambu_board = board_map.get("bambu", BAMBU_BOARD_NAME)
+    creality_board = board_map.get("creality", CREALITY_BOARD_NAME)
+    printer_parts_board = board_map.get("printer_parts", PRINTER_PARTS_BOARD_NAME)
+    printer_accessories_board = board_map.get(
+        "printer_accessories",
+        PRINTER_ACCESSORIES_BOARD_NAME,
+    )
+    fallback_board = board_map.get(
+        "default",
+        default_board or PRINTER_PARTS_BOARD_NAME,
+    )
 
     if _is_3d_printing(product):
         part = _detect_label(product, PRINTER_PART_LABELS, "3D Printer Part")
 
         if part == "Filament":
-            return FILAMENT_BOARD_NAME
+            return filament_board
         if "bambu" in text:
-            return BAMBU_BOARD_NAME
+            return bambu_board
         if any(token in text for token in ("creality", "ender", "cr-10")):
-            return CREALITY_BOARD_NAME
+            return creality_board
         if part in ("Filament Dryer", "Enclosure"):
-            return PRINTER_ACCESSORIES_BOARD_NAME
-        return PRINTER_PARTS_BOARD_NAME
+            return printer_accessories_board
+        return printer_parts_board
 
     if _is_honda(product):
-        return HONDA_BOARD_NAME
+        return honda_board
 
-    return default_board or PRINTER_PARTS_BOARD_NAME
+    return fallback_board
 
 
 def download_product_image(product, output_dir="output/pin_images"):
@@ -385,7 +400,7 @@ def download_product_image(product, output_dir="output/pin_images"):
     )
 
 
-def build_pin_draft(product, board_name="", score_info=None):
+def build_pin_draft(product, board_name="", board_map=None, score_info=None):
     image_path = download_product_image(product)
 
     return PinDraft(
@@ -393,6 +408,6 @@ def build_pin_draft(product, board_name="", score_info=None):
         description=build_description(product, score_info=score_info),
         affiliate_url=product.affiliate_url,
         image_path=image_path,
-        board_name=resolve_board_name(product, board_name),
+        board_name=resolve_board_name(product, board_name, board_map=board_map),
         topics=build_topic_tags(product),
     )
