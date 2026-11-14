@@ -1,0 +1,8 @@
+.env
+.venv/
+data/pinterest_profile/
+data/*.db
+output/
+__pycache__/
+*.pyc
+.idea/

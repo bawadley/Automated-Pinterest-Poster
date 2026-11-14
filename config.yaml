@@ -1,0 +1,50 @@
+search:
+  results_per_category: 20
+  minimum_quantity_sold: 0
+  minimum_price: 10.0
+  maximum_price: 1000.0
+  minimum_seller_feedback_percent: 97.0
+  require_image: true
+
+categories:
+  - name: "Honda CB750 Exhaust"
+    enabled: true
+    query: "Honda CB750 exhaust"
+    category_id: ""
+
+  - name: "Honda CB750 Carburetors"
+    enabled: true
+    query: "Honda CB750 carburetor"
+    category_id: ""
+
+  - name: "Honda CB750 Seats"
+    enabled: true
+    query: "Honda CB750 seat"
+    category_id: ""
+
+  - name: "Honda CB750 Fuel Tanks"
+    enabled: true
+    query: "Honda CB750 gas tank"
+    category_id: ""
+
+  - name: "Honda CB750 Gauges"
+    enabled: true
+    query: "Honda CB750 gauges"
+    category_id: ""
+
+  - name: "Honda CB750 OEM Parts"
+    enabled: true
+    query: "Honda CB750 OEM parts"
+    category_id: ""
+
+selection:
+  top_count: 5
+  cooldown_days: 90
+  history_db_path: "data/posted_history.db"
+
+  weights:
+    demand: 0.35
+    value: 0.30
+    category_value: 0.15
+    seller: 0.10
+    listing_quality: 0.10
