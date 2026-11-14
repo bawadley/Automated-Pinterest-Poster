@@ -55,16 +55,28 @@ class TipHistory:
             ).fetchall()
         return {row[0] for row in rows if row and row[0]}
 
-    def posted_items(self, limit: int = 100) -> list[dict]:
+    def recent_posted_items(
+        self,
+        cooldown_days: int,
+        limit: int = 100,
+    ) -> list[dict]:
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            days=max(int(cooldown_days), 0)
+        )
+
         with self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT tip_id, category, title, content_json, last_posted
                 FROM posted_tips
+                WHERE last_posted >= ?
                 ORDER BY last_posted DESC
                 LIMIT ?
                 """,
-                (max(int(limit), 1),),
+                (
+                    cutoff.isoformat(),
+                    max(int(limit), 1),
+                ),
             ).fetchall()
 
         items = []

@@ -119,6 +119,10 @@ def main():
         f"Tip history: {history.posted_count()} saved | "
         f"{len(excluded_ids)} excluded for {cooldown_days} days"
     )
+    print(
+        f"Content repeat cooldown: {cooldown_days} days "
+        "(older ideas may be reused after this window)"
+    )
 
     ai_generator = AIContentGenerator(app_cfg.get("ai", {}))
     ai_enabled = ai_generator.available and not args.static
@@ -151,7 +155,10 @@ def main():
         generated_by_ai = False
 
         if ai_enabled:
-            previous_items = history.posted_items(limit=100)
+            previous_items = history.recent_posted_items(
+                cooldown_days=cooldown_days,
+                limit=100,
+            )
             try:
                 print(
                     f"\nGenerating fresh AI "

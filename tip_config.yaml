@@ -1,6 +1,6 @@
 tip_settings:
   history_db_path: "data/tip_history.db"
-  cooldown_days: 365
+  cooldown_days: 60
   output_dir: "output/tip_images"
 
 tip_categories:
