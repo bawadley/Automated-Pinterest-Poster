@@ -50,9 +50,9 @@ class PinterestBrowserPublisher:
 
     def _select_board(self, page, board_name):
         """
-        Open Pinterest's board picker, search for the requested board by name,
-        and select an exact visible match. Never silently keep the previously
-        selected board when the requested board cannot be found.
+        Open Pinterest's board picker and select the requested board exactly.
+        Pinterest renders the picker differently across sessions, so support
+        both searchable and directly visible board lists.
         """
         self._click_first(page, [
             '[data-test-id*="board"]',
@@ -60,40 +60,55 @@ class PinterestBrowserPublisher:
             'button:has-text("Select")',
         ], "board selector")
 
+        page.wait_for_timeout(400)
+
         board_search = page.get_by_placeholder("Search through your boards")
-        board_search.wait_for(state="visible", timeout=5000)
-        board_search.click()
-        board_search.fill("")
-        board_search.fill(board_name)
-        page.wait_for_timeout(600)
+        search_available = False
+
+        try:
+            if board_search.count() > 0 and board_search.first.is_visible():
+                search_available = True
+        except Exception:
+            search_available = False
+
+        if search_available:
+            board_search = board_search.first
+            board_search.click()
+            board_search.fill("")
+            board_search.fill(board_name)
+            page.wait_for_timeout(600)
 
         exact_match = None
 
-        # Prefer board-picker results rather than matching text anywhere on
-        # the Pin editor page.
-        result_candidates = page.locator(
-            '[role="option"], [role="listbox"] button, '
-            '[data-test-id*="board"] button, [data-test-id*="board"] [role="button"]'
-        )
-
-        for index in range(result_candidates.count()):
-            candidate = result_candidates.nth(index)
+        # First look for exact visible text anywhere inside the currently
+        # opened picker. This handles Pinterest variants that show boards
+        # directly without a search box.
+        text_matches = page.get_by_text(board_name, exact=True)
+        for index in range(text_matches.count()):
+            candidate = text_matches.nth(index)
             try:
-                if not candidate.is_visible():
-                    continue
-                candidate_text = (candidate.inner_text() or "").strip()
-                if candidate_text.casefold() == board_name.casefold():
+                if candidate.is_visible():
                     exact_match = candidate
                     break
             except Exception:
                 pass
 
+        # If exact text was not exposed as its own node, inspect likely picker
+        # buttons/options and compare their visible text.
         if exact_match is None:
-            text_matches = page.get_by_text(board_name, exact=True)
-            for index in range(text_matches.count()):
-                candidate = text_matches.nth(index)
+            result_candidates = page.locator(
+                '[role="option"], [role="listbox"] button, '
+                '[role="dialog"] button, [data-test-id*="board"] button, '
+                '[data-test-id*="board"] [role="button"]'
+            )
+
+            for index in range(result_candidates.count()):
+                candidate = result_candidates.nth(index)
                 try:
-                    if candidate.is_visible():
+                    if not candidate.is_visible():
+                        continue
+                    candidate_text = (candidate.inner_text() or "").strip()
+                    if candidate_text.casefold() == board_name.casefold():
                         exact_match = candidate
                         break
                 except Exception:
@@ -101,25 +116,44 @@ class PinterestBrowserPublisher:
 
         if exact_match is None:
             raise RuntimeError(
-                f"Pinterest board '{board_name}' was not found in the board picker."
+                f"Pinterest board '{board_name}' was not found in the open board picker."
             )
 
         exact_match.click()
-        page.wait_for_timeout(300)
+        page.wait_for_timeout(400)
 
-        # Confirm the picker actually closed. If it remains open, try Escape
-        # once, then fail rather than risking a post to the wrong board.
-        try:
-            board_search.wait_for(state="hidden", timeout=3000)
-        except Exception:
-            page.keyboard.press("Escape")
+        # If a searchable picker is still visible, close it once. If there was
+        # no search field, verify the selected board text is now visible in the
+        # editor before continuing.
+        if search_available:
             try:
-                board_search.wait_for(state="hidden", timeout=1500)
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Pinterest board picker did not close after selecting "
-                    f"'{board_name}'."
-                ) from exc
+                board_search.wait_for(state="hidden", timeout=3000)
+            except Exception:
+                page.keyboard.press("Escape")
+                try:
+                    board_search.wait_for(state="hidden", timeout=1500)
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Pinterest board picker did not close after selecting "
+                        f"'{board_name}'."
+                    ) from exc
+
+        selected_visible = False
+        selected_text = page.get_by_text(board_name, exact=True)
+        for index in range(selected_text.count()):
+            candidate = selected_text.nth(index)
+            try:
+                if candidate.is_visible():
+                    selected_visible = True
+                    break
+            except Exception:
+                pass
+
+        if not selected_visible:
+            raise RuntimeError(
+                f"Pinterest did not visibly confirm board '{board_name}' "
+                f"after selection."
+            )
 
         print(f"Selected Pinterest board: {board_name}")
 
