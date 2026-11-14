@@ -177,6 +177,34 @@ QUESTION_PALETTES = [
 ]
 
 
+QUIZ_PALETTES = [
+    {
+        "background": "#E8F0FF",
+        "panel": "#F7FAFF",
+        "text": "#1B2A41",
+        "accent": "#3A6EA5",
+    },
+    {
+        "background": "#FFF0D9",
+        "panel": "#FFF9F0",
+        "text": "#3A2A1D",
+        "accent": "#D47A1F",
+    },
+    {
+        "background": "#E8F7EA",
+        "panel": "#F7FCF8",
+        "text": "#1E3825",
+        "accent": "#4A8F5D",
+    },
+    {
+        "background": "#F5E8FF",
+        "panel": "#FCF8FF",
+        "text": "#382348",
+        "accent": "#8A5FB5",
+    },
+]
+
+
 def _pick_palette(item_id, palettes):
     digest = hashlib.sha256(str(item_id).encode("utf-8")).digest()
     return palettes[digest[0] % len(palettes)]
@@ -476,6 +504,110 @@ def render_question_image(tip, category_name, output_dir):
     return str(output_path.resolve())
 
 
+def render_quiz_image(tip, category_name, output_dir):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    palette = _pick_palette(tip["id"], QUIZ_PALETTES)
+    image = Image.new("RGB", (WIDTH, HEIGHT), palette["background"])
+    draw = ImageDraw.Draw(image)
+
+    category_font = _font(30, bold=True)
+    prompt_font = _font(62, bold=True)
+    option_font = _font(40, bold=True)
+    cta_font = _font(30, bold=True)
+
+    margin = 90
+    max_width = WIDTH - (margin * 2)
+
+    draw.rounded_rectangle(
+        (50, 50, WIDTH - 50, HEIGHT - 50),
+        radius=44,
+        fill=palette["panel"],
+        outline=palette["accent"],
+        width=8,
+    )
+
+    y = 105
+    draw.text(
+        (margin, y),
+        category_name.upper(),
+        font=category_font,
+        fill=palette["accent"],
+    )
+
+    y += 105
+    draw.text(
+        (margin, y),
+        "QUICK QUIZ",
+        font=_font(40, bold=True),
+        fill=palette["accent"],
+    )
+
+    y += 85
+    y = _draw_wrapped(
+        draw,
+        tip["prompt"],
+        prompt_font,
+        margin,
+        y,
+        max_width,
+        line_gap=20,
+        fill=palette["text"],
+    )
+
+    y += 45
+
+    for option in tip.get("options", []):
+        option_lines = _wrap_for_width(draw, option, option_font, max_width - 60)
+        option_height = max(105, len(option_lines) * 52 + 45)
+
+        draw.rounded_rectangle(
+            (margin, y, WIDTH - margin, y + option_height),
+            radius=24,
+            outline=palette["accent"],
+            width=4,
+        )
+
+        option_y = y + 22
+        for line in option_lines:
+            draw.text(
+                (margin + 30, option_y),
+                line,
+                font=option_font,
+                fill=palette["text"],
+            )
+            option_y += 52
+
+        y += option_height + 28
+
+    cta = tip.get("cta", "COMMENT YOUR ANSWER")
+    cta_box = draw.textbbox((0, 0), cta, font=cta_font)
+    cta_width = cta_box[2] - cta_box[0]
+
+    draw.rounded_rectangle(
+        (
+            (WIDTH - cta_width) / 2 - 30,
+            HEIGHT - 185,
+            (WIDTH + cta_width) / 2 + 30,
+            HEIGHT - 105,
+        ),
+        radius=24,
+        fill=palette["accent"],
+    )
+    draw.text(
+        ((WIDTH - cta_width) / 2, HEIGHT - 161),
+        cta,
+        font=cta_font,
+        fill=palette["panel"],
+    )
+
+    filename = f"{tip['id']}_pinterest.jpg"
+    output_path = output_dir / filename
+    image.save(output_path, format="JPEG", quality=95, optimize=True)
+    return str(output_path.resolve())
+
+
 def build_tip_draft(tip, category, output_dir):
     content_type = category.get("content_type", "tip")
 
@@ -487,6 +619,12 @@ def build_tip_draft(tip, category, output_dir):
         )
     elif content_type == "question":
         image_path = render_question_image(
+            tip,
+            category_name=category["name"],
+            output_dir=output_dir,
+        )
+    elif content_type == "quiz":
+        image_path = render_quiz_image(
             tip,
             category_name=category["name"],
             output_dir=output_dir,
