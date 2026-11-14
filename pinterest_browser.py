@@ -69,7 +69,7 @@ class PinterestBrowserPublisher:
 
         for topic in topics[:10]:
             try:
-                topic_input.click()
+                topic_input.click(timeout=3000)
                 topic_input.fill("")
                 topic_input.fill(topic)
                 page.wait_for_timeout(700)
@@ -308,6 +308,30 @@ class PinterestBrowserPublisher:
                     option = page.get_by_text(board_name, exact=True).first
                     option.wait_for(state="visible", timeout=8000)
                     option.click()
+
+                    # Pinterest's board picker can remain open briefly after a
+                    # board is selected. If topic-tag automation starts while
+                    # that overlay is still present, it intercepts clicks and
+                    # Playwright can retry for the full default timeout.
+                    board_search = page.get_by_placeholder(
+                        "Search through your boards"
+                    )
+                    try:
+                        board_search.wait_for(
+                            state="hidden",
+                            timeout=3000,
+                        )
+                    except Exception:
+                        try:
+                            page.keyboard.press("Escape")
+                            board_search.wait_for(
+                                state="hidden",
+                                timeout=1500,
+                            )
+                        except Exception:
+                            pass
+
+                    page.wait_for_timeout(250)
                 except Exception as exc:
                     print(
                         f"WARNING: Could not automatically choose board "
