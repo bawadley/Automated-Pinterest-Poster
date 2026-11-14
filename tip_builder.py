@@ -143,6 +143,40 @@ QUOTE_PALETTES = [
 ]
 
 
+QUESTION_PALETTES = [
+    {
+        "background": "#FFF0C9",
+        "panel": "#FFF8E8",
+        "text": "#2B2418",
+        "accent": "#D97706",
+    },
+    {
+        "background": "#DDF4FF",
+        "panel": "#F5FBFF",
+        "text": "#15334A",
+        "accent": "#247BA0",
+    },
+    {
+        "background": "#E3F4E8",
+        "panel": "#F5FCF7",
+        "text": "#173A26",
+        "accent": "#3D8B5F",
+    },
+    {
+        "background": "#F4E2FF",
+        "panel": "#FCF6FF",
+        "text": "#3D2450",
+        "accent": "#8B5FBF",
+    },
+    {
+        "background": "#FFE2E2",
+        "panel": "#FFF7F7",
+        "text": "#4A2020",
+        "accent": "#C95A5A",
+    },
+]
+
+
 def _pick_palette(item_id, palettes):
     digest = hashlib.sha256(str(item_id).encode("utf-8")).digest()
     return palettes[digest[0] % len(palettes)]
@@ -336,11 +370,123 @@ def render_quote_image(tip, category_name, output_dir):
     return str(output_path.resolve())
 
 
+def render_question_image(tip, category_name, output_dir):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    palette = _pick_palette(tip["id"], QUESTION_PALETTES)
+    image = Image.new("RGB", (WIDTH, HEIGHT), palette["background"])
+    draw = ImageDraw.Draw(image)
+
+    category_font = _font(30, bold=True)
+    prompt_font = _font(70, bold=True)
+    subtext_font = _font(38)
+    cta_font = _font(30, bold=True)
+
+    margin = 95
+    max_width = WIDTH - (margin * 2)
+
+    draw.rounded_rectangle(
+        (50, 50, WIDTH - 50, HEIGHT - 50),
+        radius=44,
+        fill=palette["panel"],
+        outline=palette["accent"],
+        width=8,
+    )
+
+    y = 110
+    draw.text(
+        (margin, y),
+        category_name.upper(),
+        font=category_font,
+        fill=palette["accent"],
+    )
+
+    y += 135
+    draw.ellipse(
+        (margin, y, margin + 105, y + 105),
+        fill=palette["accent"],
+    )
+    q_font = _font(72, bold=True)
+    q_box = draw.textbbox((0, 0), "?", font=q_font)
+    q_w = q_box[2] - q_box[0]
+    q_h = q_box[3] - q_box[1]
+    draw.text(
+        (margin + (105 - q_w) / 2, y + (105 - q_h) / 2 - 8),
+        "?",
+        font=q_font,
+        fill=palette["panel"],
+    )
+
+    y += 155
+    y = _draw_wrapped(
+        draw,
+        tip["prompt"],
+        prompt_font,
+        margin,
+        y,
+        max_width,
+        line_gap=24,
+        fill=palette["text"],
+    )
+
+    y += 55
+    draw.line(
+        (margin, y, WIDTH - margin, y),
+        fill=palette["accent"],
+        width=4,
+    )
+    y += 50
+
+    y = _draw_wrapped(
+        draw,
+        tip.get("subtext", ""),
+        subtext_font,
+        margin,
+        y,
+        max_width,
+        line_gap=16,
+        fill=palette["text"],
+    )
+
+    cta = tip.get("cta", "JOIN THE CONVERSATION")
+    cta_box = draw.textbbox((0, 0), cta, font=cta_font)
+    cta_width = cta_box[2] - cta_box[0]
+
+    draw.rounded_rectangle(
+        (
+            (WIDTH - cta_width) / 2 - 30,
+            HEIGHT - 190,
+            (WIDTH + cta_width) / 2 + 30,
+            HEIGHT - 105,
+        ),
+        radius=24,
+        fill=palette["accent"],
+    )
+    draw.text(
+        ((WIDTH - cta_width) / 2, HEIGHT - 165),
+        cta,
+        font=cta_font,
+        fill=palette["panel"],
+    )
+
+    filename = f"{tip['id']}_pinterest.jpg"
+    output_path = output_dir / filename
+    image.save(output_path, format="JPEG", quality=95, optimize=True)
+    return str(output_path.resolve())
+
+
 def build_tip_draft(tip, category, output_dir):
     content_type = category.get("content_type", "tip")
 
     if content_type == "quote":
         image_path = render_quote_image(
+            tip,
+            category_name=category["name"],
+            output_dir=output_dir,
+        )
+    elif content_type == "question":
+        image_path = render_question_image(
             tip,
             category_name=category["name"],
             output_dir=output_dir,

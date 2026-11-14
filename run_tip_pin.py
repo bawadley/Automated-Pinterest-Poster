@@ -26,11 +26,11 @@ def parse_args():
     )
     parser.add_argument(
         "--content-type",
-        choices=["tip", "quote", "all"],
+        choices=["tip", "quote", "question", "all"],
         default="all",
         help=(
             "Choose which non-affiliate content to run: "
-            "'tip', 'quote', or 'all'."
+            "'tip', 'quote', 'question', or 'all'."
         ),
     )
     parser.add_argument(
@@ -138,6 +138,8 @@ def main():
         content_type = category.get("content_type", "tip")
         if content_type == "quote":
             print(f"Quote: {tip['quote']}")
+        elif content_type == "question":
+            print(f"Prompt: {tip['prompt']}")
         else:
             print(f"Headline: {tip['headline']}")
 
