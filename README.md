@@ -41,6 +41,52 @@ Install or refresh dependencies if needed:
 
 ---
 
+# Desktop GUI
+
+You can run the automation as a normal Windows app instead of typing commands.
+
+After pulling the latest code, double-click:
+
+```text
+Pinterest Automation App.bat
+```
+
+The GUI includes:
+
+- Affiliate Pins tab
+- Non-Affiliate / AI Content tab
+- 3D-printing or Honda vertical selection
+- Specific category selection
+- Affiliate Pin count control
+- AI/static content selection
+- Dry-run checkbox
+- Live output console
+- Pinterest login button
+- Stop Current Run button
+- Continue / Close Dry-Run Browser button
+- Open Output Folder button
+- Open README button
+
+The GUI runs the same tested Python scripts underneath, so the command-line workflow still works exactly as before.
+
+For safety, the GUI starts with **Dry run enabled** each time you open it.
+
+During a dry run, inspect the Pinterest browser and then click:
+
+```text
+Continue / Close Dry-Run Browser
+```
+
+That replaces pressing Enter in the PowerShell terminal.
+
+You can also launch the GUI manually:
+
+```powershell
+.\.venv\Scripts\python.exe gui_app.py
+```
+
+---
+
 # Environment setup
 
 The local `.env` file contains secrets and runtime settings.
@@ -544,6 +590,8 @@ Post humor:
 # Main files
 
 ```text
+gui_app.py               Windows desktop GUI
+Pinterest Automation App.bat  Double-click GUI launcher
 run_best_pin.py          Affiliate eBay -> Pinterest workflow
 run_tip_pin.py           Non-affiliate / AI content workflow
 ai_content_generator.py  AI generation + similarity checking
