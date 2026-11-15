@@ -26,6 +26,7 @@ class PinterestAutomationGUI:
 
         self.affiliate_categories = []
         self.tip_categories = []
+        self.content_slot_vars = []
         self._load_categories()
 
         self._build_ui()
@@ -244,24 +245,13 @@ class PinterestAutomationGUI:
             width=18,
         )
         vertical_box.grid(row=0, column=1, sticky="w", pady=6)
-        vertical_box.bind("<<ComboboxSelected>>", lambda _e: self._refresh_content_categories())
-
-        ttk.Label(grid, text="Content type:").grid(
-            row=1, column=0, sticky="w", padx=(0, 8), pady=6
+        vertical_box.bind(
+            "<<ComboboxSelected>>",
+            lambda _e: self._refresh_content_categories(),
         )
-        self.content_type = tk.StringVar(value="tip")
-        content_type_box = ttk.Combobox(
-            grid,
-            textvariable=self.content_type,
-            values=["tip", "quote", "question", "quiz", "all"],
-            state="readonly",
-            width=18,
-        )
-        content_type_box.grid(row=1, column=1, sticky="w", pady=6)
-        content_type_box.bind("<<ComboboxSelected>>", lambda _e: self._refresh_content_categories())
 
         ttk.Label(grid, text="Specific category:").grid(
-            row=2, column=0, sticky="w", padx=(0, 8), pady=6
+            row=1, column=0, sticky="w", padx=(0, 8), pady=6
         )
         self.content_category = tk.StringVar(value="Automatic")
         self.content_category_box = ttk.Combobox(
@@ -271,7 +261,41 @@ class PinterestAutomationGUI:
             width=46,
         )
         self.content_category_box.grid(
-            row=2, column=1, columnspan=2, sticky="w", pady=6
+            row=1, column=1, columnspan=3, sticky="w", pady=6
+        )
+
+        ttk.Label(grid, text="Number of Pins:").grid(
+            row=2, column=0, sticky="w", padx=(0, 8), pady=6
+        )
+        self.content_count = tk.IntVar(value=1)
+        count_spin = ttk.Spinbox(
+            grid,
+            from_=1,
+            to=20,
+            textvariable=self.content_count,
+            width=8,
+            command=self._rebuild_content_slots,
+        )
+        count_spin.grid(row=2, column=1, sticky="w", pady=6)
+        count_spin.bind("<KeyRelease>", lambda _e: self._rebuild_content_slots())
+        count_spin.bind("<FocusOut>", lambda _e: self._rebuild_content_slots())
+
+        ttk.Label(
+            grid,
+            text="Choose each Pin type. Random picks Tip, Quote, Question, or Quiz.",
+        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 4))
+
+        self.content_slots_frame = ttk.LabelFrame(
+            grid,
+            text="Pin Plan",
+            padding=8,
+        )
+        self.content_slots_frame.grid(
+            row=4,
+            column=0,
+            columnspan=4,
+            sticky="ew",
+            pady=(4, 8),
         )
 
         self.static_var = tk.BooleanVar(value=False)
@@ -279,25 +303,73 @@ class PinterestAutomationGUI:
             grid,
             text="Use prewritten static content instead of AI",
             variable=self.static_var,
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=6)
+        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=6)
 
         ttk.Button(
             grid,
-            text="Generate & Run Content Pin",
+            text="Generate & Run Content Batch",
             command=self.run_content,
-        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(14, 4))
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(12, 4))
 
         ttk.Label(
             grid,
             text=(
-                "AI mode generates fresh content, checks recent history for "
-                "similarity, renders the card, and then uses the same Pinterest "
-                "publishing workflow."
+                "The batch avoids duplicate cards, uses recent history for AI "
+                "deduplication, and prefers different matching categories within "
+                "the same run when possible."
             ),
             wraplength=780,
-        ).grid(row=5, column=0, columnspan=4, sticky="w", pady=(4, 0))
+        ).grid(row=7, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
         self._refresh_content_categories()
+        self._rebuild_content_slots()
+
+    def _rebuild_content_slots(self):
+        try:
+            count = max(1, min(int(self.content_count.get()), 20))
+        except Exception:
+            count = 1
+
+        previous = [var.get() for var in self.content_slot_vars]
+
+        for child in self.content_slots_frame.winfo_children():
+            child.destroy()
+
+        self.content_slot_vars = []
+        options = ["Random", "Tip", "Quote", "Question", "Quiz"]
+
+        for index in range(count):
+            value = previous[index] if index < len(previous) else "Random"
+            var = tk.StringVar(value=value)
+            self.content_slot_vars.append(var)
+
+            row = index // 4
+            column = (index % 4) * 2
+
+            ttk.Label(
+                self.content_slots_frame,
+                text=f"Pin {index + 1}:",
+            ).grid(
+                row=row,
+                column=column,
+                sticky="e",
+                padx=(6, 4),
+                pady=4,
+            )
+
+            ttk.Combobox(
+                self.content_slots_frame,
+                textvariable=var,
+                values=options,
+                state="readonly",
+                width=11,
+            ).grid(
+                row=row,
+                column=column + 1,
+                sticky="w",
+                padx=(0, 10),
+                pady=4,
+            )
 
     def _refresh_affiliate_categories(self):
         vertical = self.affiliate_vertical.get()
@@ -313,14 +385,10 @@ class PinterestAutomationGUI:
 
     def _refresh_content_categories(self):
         vertical = self.content_vertical.get()
-        content_type = self.content_type.get()
 
         matches = []
         for category in self.tip_categories:
             if category.get("vertical") != vertical:
-                continue
-            category_type = category.get("content_type", "tip")
-            if content_type != "all" and category_type != content_type:
                 continue
             matches.append(category.get("name"))
 
@@ -387,14 +455,52 @@ class PinterestAutomationGUI:
         if not self._confirm_live_mode():
             return
 
+        try:
+            count = int(self.content_count.get())
+        except Exception:
+            messagebox.showerror(
+                "Invalid Pin count",
+                "Pin count must be a whole number.",
+            )
+            return
+
+        if count < 1 or count > 20:
+            messagebox.showerror(
+                "Invalid Pin count",
+                "Pin count must be between 1 and 20.",
+            )
+            return
+
+        self._rebuild_content_slots()
+
+        if len(self.content_slot_vars) != count:
+            messagebox.showerror(
+                "Pin plan error",
+                "Could not build the requested Pin plan.",
+            )
+            return
+
         command = [
             self._python_executable(),
             "run_tip_pin.py",
             "--vertical",
             self.content_vertical.get(),
-            "--content-type",
-            self.content_type.get(),
+            "--count",
+            str(count),
         ]
+
+        type_map = {
+            "Random": "random",
+            "Tip": "tip",
+            "Quote": "quote",
+            "Question": "question",
+            "Quiz": "quiz",
+        }
+
+        for slot_var in self.content_slot_vars:
+            command.extend(
+                ["--pin-type", type_map.get(slot_var.get(), "random")]
+            )
 
         category = self.content_category.get()
         if category and category != "Automatic":
@@ -403,7 +509,7 @@ class PinterestAutomationGUI:
         if self.static_var.get():
             command.append("--static")
 
-        self._start_process(command, "Non-Affiliate Content")
+        self._start_process(command, "Non-Affiliate Content Batch")
 
     def run_login(self):
         command = [self._python_executable(), "pinterest_login.py"]

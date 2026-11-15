@@ -58,6 +58,8 @@ The GUI includes:
 - 3D-printing or Honda vertical selection
 - Specific category selection
 - Affiliate Pin count control
+- Non-affiliate Pin count control
+- Per-Pin Tip / Quote / Question / Quiz / Random selectors
 - AI/static content selection
 - Dry-run checkbox
 - Live output console
@@ -228,7 +230,22 @@ The non-affiliate poster supports:
 - `quote`
 - `question`
 - `quiz`
-- `all`
+- `random` for individual batch slots
+- `all` as the general CLI mode
+
+The GUI can create a multi-Pin non-affiliate batch where every Pin has its own type selector.
+
+Example GUI plan:
+
+```text
+Number of Pins: 3
+
+Pin 1: Quiz
+Pin 2: Question
+Pin 3: Random
+```
+
+The program prefers different matching categories inside the same batch when possible and prevents the exact same card from being reused in that run. AI-generated cards from earlier in the current batch are also included in duplicate checking even during dry runs.
 
 When `OPENAI_API_KEY` is configured, the program generates fresh content with AI first.
 
@@ -247,6 +264,25 @@ If AI generation fails or no API key is configured, the program falls back to th
 ```powershell
 .\.venv\Scripts\python.exe run_tip_pin.py
 ```
+
+
+## Post multiple non-affiliate Pins
+
+Use `--count` and repeat `--pin-type` once for each Pin.
+
+Example: Quiz, Question, Random:
+
+```powershell
+.\.venv\Scripts\python.exe run_tip_pin.py --vertical 3d --count 3 --pin-type quiz --pin-type question --pin-type random
+```
+
+Example: three randomly selected content types:
+
+```powershell
+.\.venv\Scripts\python.exe run_tip_pin.py --vertical honda --count 3 --pin-type random --pin-type random --pin-type random
+```
+
+If you omit `--pin-type`, the existing `--content-type` value is used for every requested Pin. If `--content-type all` is used, each slot behaves as Random.
 
 ## Post any Honda non-affiliate content
 
@@ -650,6 +686,10 @@ git pull origin master
 
 # 3D AI tip
 .\.venv\Scripts\python.exe run_tip_pin.py --content-type tip --vertical 3d
+
+
+# Three non-affiliate Pins: quiz, question, random
+.\.venv\Scripts\python.exe run_tip_pin.py --vertical 3d --count 3 --pin-type quiz --pin-type question --pin-type random
 
 # Honda question
 .\.venv\Scripts\python.exe run_tip_pin.py --content-type question --vertical honda
