@@ -117,6 +117,31 @@ Always use a dry run first after changing Pinterest automation code.
 .\.venv\Scripts\python.exe run_best_pin.py --vertical 3d
 ```
 
+
+## Post multiple Pins from one vertical
+
+Use `--count` (or `--pins`) to choose how many fresh affiliate Pins to publish in one run.
+
+Three 3D-printing Pins:
+
+```powershell
+.\.venv\Scripts\python.exe run_best_pin.py --vertical 3d --count 3
+```
+
+Three Honda Pins:
+
+```powershell
+.\.venv\Scripts\python.exe run_best_pin.py --vertical honda --count 3
+```
+
+The selector keeps the batch diverse by taking strong products from different search categories first when possible. Each confirmed Pin is saved to posted history immediately.
+
+You can also use the alias:
+
+```powershell
+.\.venv\Scripts\python.exe run_best_pin.py --vertical 3d --pins 3
+```
+
 ## Post one Honda affiliate Pin
 
 ```powershell
@@ -565,6 +590,9 @@ git pull origin master
 
 # 3D affiliate Pin
 .\.venv\Scripts\python.exe run_best_pin.py --vertical 3d
+
+# Three 3D affiliate Pins in one run
+.\.venv\Scripts\python.exe run_best_pin.py --vertical 3d --count 3
 
 # List non-affiliate categories
 .\.venv\Scripts\python.exe run_tip_pin.py --list-categories

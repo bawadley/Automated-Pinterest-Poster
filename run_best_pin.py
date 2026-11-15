@@ -31,6 +31,18 @@ def parse_args():
         ),
     )
     parser.add_argument(
+        "--count",
+        "--pins",
+        dest="count",
+        type=int,
+        default=None,
+        help=(
+            "Number of affiliate Pins to post from the selected vertical or "
+            "single category. Example: --vertical 3d --count 3. "
+            "For multi-category runs, this caps the number of category winners."
+        ),
+    )
+    parser.add_argument(
         "--list-categories",
         action="store_true",
         help="List enabled search categories and exit without calling eBay.",
@@ -54,6 +66,11 @@ def main():
     if args.list_categories:
         print_categories(cfg)
         return
+
+    if args.count is not None and args.count < 1:
+        raise RuntimeError("--count / --pins must be at least 1.")
+
+    requested_count = args.count if args.count is not None else 1
 
     if args.vertical:
         print(f"Filter: vertical = {args.vertical}")
@@ -90,7 +107,6 @@ def main():
     )
 
     print("\n[4/4] Ranking eligible products...")
-    top_count = int(selection_cfg.get("top_count", 5))
     weights = selection_cfg.get("weights", None)
 
     if args.categories and len(args.categories) > 1:
@@ -120,17 +136,25 @@ def main():
                 break
 
         selected = winners
+        if args.count is not None:
+            selected = selected[:requested_count]
+
         print(
             f"      Multi-category mode: selected "
             f"{len(selected)} category winner(s)."
         )
     else:
+        selection_count = max(requested_count, 1)
         selected = select_top_products(
             products,
-            count=top_count,
+            count=selection_count,
             weights=weights,
         )
-        selected = selected[:1]
+        selected = selected[:selection_count]
+        print(
+            f"      Requested Pins: {selection_count} | "
+            f"selected {len(selected)} fresh product(s)."
+        )
 
     if not selected:
         raise RuntimeError(
