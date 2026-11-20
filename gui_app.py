@@ -411,6 +411,7 @@ class PinterestAutomationGUI:
             "true" if self.dry_run_var.get() else "false"
         )
         env["PYTHONUNBUFFERED"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8:backslashreplace"
         return env
 
     def _confirm_live_mode(self):

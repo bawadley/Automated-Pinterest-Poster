@@ -169,6 +169,12 @@ def _choose_category(
 
 
 def main():
+    # Some eBay titles contain Unicode characters outside Windows cp1252.
+    # Preserve readable output without letting terminal encoding abort a run.
+    import sys
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
     args = parse_args()
     app_cfg = load_config()
     tip_cfg = load_tip_config()

@@ -58,6 +58,12 @@ def print_categories(cfg):
 
 
 def main():
+    # Some eBay titles contain Unicode characters outside Windows cp1252.
+    # Preserve readable output without letting terminal encoding abort a run.
+    import sys
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
     args = parse_args()
     cfg = load_config()
 
