@@ -222,6 +222,16 @@ The multi-category mode selects one fresh winner from each matched category.
 
 ---
 
+# Non-affiliate image design variation
+
+Non-affiliate cards now rotate through **four visual layouts** per content type, with independently chosen color palettes. This includes editorial cards, bold hero designs, split-section posters, and floating-card layouts.
+
+The rendering engine adjusts font sizes to help longer generated content fit inside the image. Visual selection is deterministic based on each content ID, and the existing 1000 x 1500 pixel output is preserved.
+
+The same variation is available for AI-generated content and static/prewritten content. Affiliate product images are unchanged.
+
+---
+
 # Non-affiliate Pinterest content
 
 The non-affiliate poster supports:

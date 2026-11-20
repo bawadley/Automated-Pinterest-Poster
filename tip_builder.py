@@ -608,33 +608,214 @@ def render_quiz_image(tip, category_name, output_dir):
     return str(output_path.resolve())
 
 
+
+# Layout engine v2: each card gets one of four compositions chosen from its
+# content ID. The palette is selected independently, multiplying visual variety.
+def _layout_index(item_id):
+    digest = hashlib.sha256(("layout:" + str(item_id)).encode("utf-8")).digest()
+    return digest[0] % 4
+
+
+def _fit_block(draw, value, width, height, max_size=70, min_size=23, bold=True,
+               gap=12):
+    value = str(value or "").strip()
+    for size in range(max_size, min_size - 1, -2):
+        font = _font(size, bold=bold)
+        lines = _wrap_for_width(draw, value, font, width)
+        line_height = draw.textbbox((0, 0), "Ag", font=font)[3] + gap
+        if len(lines) * line_height <= height:
+            return font, lines, line_height
+    font = _font(min_size, bold=bold)
+    lines = _wrap_for_width(draw, value, font, width)
+    line_height = draw.textbbox((0, 0), "Ag", font=font)[3] + gap
+    return font, lines, line_height
+
+
+def _block(draw, value, x, y, width, height, color, size=70, min_size=23,
+           bold=True, center=False, gap=12):
+    font, lines, line_height = _fit_block(
+        draw, value, width, height, size, min_size, bold, gap
+    )
+    # If unusually long AI text remains, keep the artwork inside its box.
+    visible_lines = max(1, int(height // line_height))
+    for line in lines[:visible_lines]:
+        bbox = draw.textbbox((0, 0), line, font=font)
+        line_width = bbox[2] - bbox[0]
+        tx = x + (width - line_width) / 2 if center else x
+        draw.text((tx, y), line, font=font, fill=color)
+        y += line_height
+    return y
+
+
+def _chip(draw, text, xy, bg, fg, max_width=780):
+    x, y = xy
+    size = 26
+    font = _font(size, bold=True)
+    label = str(text).upper()
+    while size > 17 and draw.textbbox((0, 0), label, font=font)[2] > max_width:
+        size -= 2
+        font = _font(size, bold=True)
+    bbox = draw.textbbox((0, 0), label, font=font)
+    width = min(max_width, bbox[2] + 48)
+    draw.rounded_rectangle((x, y, x + width, y + 56), radius=22, fill=bg)
+    draw.text((x + 24, y + 12), label, fill=fg, font=font)
+
+
+def _save_varied(image, tip, output_dir):
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{tip['id']}_pinterest.jpg"
+    image.save(path, format="JPEG", quality=95, optimize=True)
+    return str(path.resolve())
+
+
+def render_varied_image(tip, category_name, output_dir, content_type):
+    palettes = {
+        "tip": TIP_PALETTES,
+        "quote": QUOTE_PALETTES,
+        "question": QUESTION_PALETTES,
+        "quiz": QUIZ_PALETTES,
+    }
+    palette = _pick_palette(tip["id"], palettes.get(content_type, TIP_PALETTES))
+    layout = _layout_index(tip["id"])
+    bg, panel = palette["background"], palette["panel"]
+    ink, accent = palette["text"], palette["accent"]
+
+    image = Image.new("RGB", (WIDTH, HEIGHT), bg)
+    d = ImageDraw.Draw(image)
+
+    # Four distinct visual systems: editorial, bold headline, split panels,
+    # and floating card. Keep substantial safe margins for Pinterest crops.
+    if layout == 0:
+        d.rectangle((0, 0, WIDTH, 190), fill=accent)
+        d.rounded_rectangle((52, 220, 948, 1435), radius=30, fill=panel)
+        _chip(d, category_name, (88, 77), panel, ink, 770)
+        title_box = (100, 280, 800, 410)
+        content_box = (100, 760, 800, 520)
+        footer_y = 1345
+        _block(d, "01 / FIELD NOTES", 102, 227, 700, 48, accent, 30, 23)
+    elif layout == 1:
+        d.rectangle((0, 0, WIDTH, 730), fill=accent)
+        d.rounded_rectangle((58, 670, 942, 1420), radius=48, fill=panel)
+        d.ellipse((770, 110, 1120, 460), outline=panel, width=14)
+        d.ellipse((805, 140, 1090, 425), outline=panel, width=4)
+        _chip(d, category_name, (80, 70), panel, ink, 790)
+        title_box = (88, 230, 825, 400)
+        content_box = (110, 765, 780, 500)
+        footer_y = 1345
+    elif layout == 2:
+        d.polygon([(0, 0), (1000, 0), (1000, 315), (0, 560)], fill=accent)
+        d.rounded_rectangle((60, 580, 940, 1425), radius=28, fill=panel)
+        d.rectangle((60, 580, 86, 1425), fill=accent)
+        _chip(d, category_name, (75, 85), panel, ink, 780)
+        title_box = (100, 265, 790, 270)
+        content_box = (118, 655, 760, 610)
+        footer_y = 1348
+    else:
+        d.rounded_rectangle((45, 45, 955, 1455), radius=52,
+                            outline=accent, width=9)
+        d.rectangle((80, 80, 920, 205), fill=accent)
+        d.rounded_rectangle((80, 625, 920, 1340), radius=38, fill=panel)
+        d.line((120, 575, 880, 575), fill=accent, width=8)
+        _chip(d, category_name, (105, 111), panel, ink, 760)
+        title_box = (112, 260, 770, 300)
+        content_box = (125, 705, 750, 535)
+        footer_y = 1380
+
+    tx, ty, tw, th = title_box
+    cx, cy, cw, ch = content_box
+    title_color = panel if layout in (1, 2) else ink
+
+    if content_type == "tip":
+        headline = tip.get("headline", "")
+        _block(d, headline, tx, ty, tw, th, title_color, size=75, min_size=29)
+        body = tip.get("body", "")
+        bullets = tip.get("bullets", [])[:3]
+        body_height = min(230, int(ch * 0.46))
+        next_y = _block(d, body, cx, cy, cw, body_height, ink,
+                        size=36, min_size=23, bold=False)
+        bullet_top = max(cy + body_height + 20, next_y + 24)
+        remaining = max(75, cy + ch - bullet_top)
+        per_bullet = remaining / max(len(bullets), 1)
+        for i, bullet in enumerate(bullets):
+            by = bullet_top + i * per_bullet
+            d.ellipse((cx, by + 12, cx + 14, by + 26), fill=accent)
+            _block(d, bullet, cx + 30, by, cw - 30, per_bullet - 6, ink,
+                   size=29, min_size=20, bold=False, gap=5)
+        footer = "SAVE FOR LATER"
+    elif content_type == "quote":
+        d.text((tx, ty - 30), "“", font=_font(120, True), fill=title_color)
+        _block(d, tip.get("quote", ""), tx, ty + 135, tw,
+               th + ch - 65, title_color if layout in (1, 2) else ink,
+               size=70, min_size=31)
+        if layout == 1:
+            _block(d, "A LITTLE RELATABLE HUMOR", cx, cy + 250, cw, 80, ink,
+                   size=27)
+        footer = "RELATABLE? SAVE IT"
+    elif content_type == "question":
+        _block(d, "LET'S TALK", tx, ty, tw, 65, title_color, size=32)
+        _block(d, tip.get("prompt", ""), tx, ty + 100, tw, th - 105,
+               title_color, size=75, min_size=29)
+        d.ellipse((cx, cy + 10, cx + 90, cy + 100), fill=accent)
+        _block(d, "?", cx + 16, cy + 10, 60, 83, panel, size=60, center=True)
+        _block(d, tip.get("subtext", ""), cx, cy + 140, cw, ch - 185,
+               ink, size=39, min_size=24, bold=False)
+        footer = tip.get("cta") or "JOIN THE CONVERSATION"
+    else:
+        _block(d, "QUICK QUIZ", tx, ty, tw, 65, title_color, size=34)
+        _block(d, tip.get("prompt", ""), tx, ty + 100, tw, th - 110,
+               title_color, size=61, min_size=28)
+        options = tip.get("options", [])[:3]
+        option_height = min(148, (ch - 20) / max(len(options), 1) - 12)
+        for i, option in enumerate(options):
+            oy = cy + 10 + i * (option_height + 15)
+            if layout % 2:
+                d.rounded_rectangle(
+                    (cx, oy, cx + cw, oy + option_height),
+                    radius=18, outline=accent, width=4
+                )
+            else:
+                d.rounded_rectangle(
+                    (cx, oy, cx + cw, oy + option_height),
+                    radius=18, fill=bg
+                )
+            _block(d, option, cx + 24, oy + 17, cw - 48,
+                   option_height - 23, ink, size=36, min_size=22)
+        footer = tip.get("cta") or "COMMENT YOUR ANSWER"
+
+    # Footer treatment changes with the composition.
+    footer_size = 25
+    footer_font = _font(footer_size, bold=True)
+    while footer_size > 17 and d.textbbox((0, 0), footer.upper(),
+                                          font=footer_font)[2] > 740:
+        footer_size -= 2
+        footer_font = _font(footer_size, bold=True)
+    footer_width = d.textbbox((0, 0), footer.upper(), font=footer_font)[2]
+    footer_x = (WIDTH - footer_width) / 2
+    if layout in (0, 2):
+        d.line((140, footer_y - 25, 860, footer_y - 25), fill=accent, width=4)
+        d.text((footer_x, footer_y), footer.upper(), font=footer_font,
+               fill=accent)
+    elif layout == 1:
+        d.rounded_rectangle((165, footer_y - 20, 835, footer_y + 55),
+                            radius=22, fill=accent)
+        d.text((footer_x, footer_y), footer.upper(), font=footer_font,
+               fill=panel)
+    else:
+        d.text((footer_x, footer_y), footer.upper(), font=footer_font,
+               fill=accent)
+    return _save_varied(image, tip, output_dir)
+
+
 def build_tip_draft(tip, category, output_dir):
     content_type = category.get("content_type", "tip")
 
-    if content_type == "quote":
-        image_path = render_quote_image(
-            tip,
-            category_name=category["name"],
-            output_dir=output_dir,
-        )
-    elif content_type == "question":
-        image_path = render_question_image(
-            tip,
-            category_name=category["name"],
-            output_dir=output_dir,
-        )
-    elif content_type == "quiz":
-        image_path = render_quiz_image(
-            tip,
-            category_name=category["name"],
-            output_dir=output_dir,
-        )
-    else:
-        image_path = render_tip_image(
-            tip,
-            category_name=category["name"],
-            output_dir=output_dir,
-        )
+    image_path = render_varied_image(
+        tip,
+        category_name=category["name"],
+        output_dir=output_dir,
+        content_type=content_type,
+    )
 
     return PinDraft(
         title=tip["title"][:100],
