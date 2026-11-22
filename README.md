@@ -17,6 +17,35 @@ Current Pinterest boards:
 
 ---
 
+## macOS desktop version
+
+The same GUI now has a macOS launcher. It is a Python/Tkinter application, **not yet a packaged standalone .app**.
+
+**One-time setup on a Mac:**
+
+1. Install Python 3 for macOS (with Tkinter) and Google Chrome.
+2. Clone this repository to the Mac (or pull the latest updates).
+3. In Finder, open `Setup Pinterest Automation Mac.command`. This creates a Mac-specific `.venv` and installs `requirements.txt`.
+4. Copy your own `.env` configuration into the project root; never commit credentials.
+5. Double-click `Pinterest Automation Mac.command` to launch the GUI.
+6. Click **Pinterest Login** inside the GUI to sign in on the Mac, then test with **Dry run** enabled.
+
+If Finder refuses to open a `.command` file due to permissions, run the following once from Terminal in the project directory:
+
+```bash
+chmod +x "Setup Pinterest Automation Mac.command" "Pinterest Automation Mac.command"
+```
+
+Or launch directly:
+
+```bash
+./.venv/bin/python gui_app.py
+```
+
+**Important:** The Mac needs its own virtual environment and its own browser login profile. Do not copy the Windows `.venv` or assume the Windows Pinterest browser profile is portable. The actual Pinterest browser automation has been developed/tested on Windows; macOS needs a dry-run validation before live posting. The GUI still uses the same content generation, categorization, Pin-count, affiliate, and publishing scripts.
+
+---
+
 ## Quick start
 
 From PowerShell, first make sure you are inside the project folder.

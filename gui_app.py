@@ -650,18 +650,26 @@ class PinterestAutomationGUI:
         self.log.delete("1.0", "end")
         self.log.configure(state="disabled")
 
+    def _open_local_path(self, path):
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        elif os.name == "nt":
+            os.startfile(str(path))
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+
     def open_output_folder(self):
         path = BASE_DIR / "output"
         path.mkdir(parents=True, exist_ok=True)
         try:
-            os.startfile(str(path))
+            self._open_local_path(path)
         except Exception as exc:
             messagebox.showerror("Could not open folder", str(exc))
 
     def open_readme(self):
         path = BASE_DIR / "README.md"
         try:
-            os.startfile(str(path))
+            self._open_local_path(path)
         except Exception as exc:
             messagebox.showerror("Could not open README", str(exc))
 
